@@ -156,6 +156,42 @@ impl Selection {
         }
     }
 
+    /// Combine this selection with another using the given operation.
+    /// Both selections are converted to masks for pixel-accurate combining.
+    pub fn combine(&self, other: &Selection, op: SelectionOp, width: u32, height: u32) -> Self {
+        match op {
+            SelectionOp::Replace => other.clone(),
+            SelectionOp::Add | SelectionOp::Subtract | SelectionOp::Intersect => {
+                let a = self.to_mask(width, height);
+                let b = other.to_mask(width, height);
+                if let (
+                    Self::Mask { data: da, .. },
+                    Self::Mask { data: db, .. },
+                ) = (&a, &b)
+                {
+                    let data = da
+                        .iter()
+                        .zip(db.iter())
+                        .map(|(&va, &vb)| match op {
+                            SelectionOp::Add => (va + vb).min(1.0),
+                            SelectionOp::Subtract => (va - vb).max(0.0),
+                            SelectionOp::Intersect => va.min(vb),
+                            SelectionOp::Replace => unreachable!(),
+                        })
+                        .collect();
+                    Self::Mask {
+                        width,
+                        height,
+                        data,
+                    }
+                } else {
+                    // to_mask always returns Mask variant
+                    unreachable!()
+                }
+            }
+        }
+    }
+
     /// Convert any selection to a mask representation.
     pub fn to_mask(&self, width: u32, height: u32) -> Self {
         match self {
@@ -321,6 +357,82 @@ mod tests {
         } else {
             panic!("expected mask");
         }
+    }
+
+    // ── Combine operations ──
+
+    #[test]
+    fn combine_replace() {
+        let a = Selection::Rect(Rect {
+            x: 0.0, y: 0.0, width: 5.0, height: 5.0,
+        });
+        let b = Selection::Rect(Rect {
+            x: 3.0, y: 3.0, width: 5.0, height: 5.0,
+        });
+        let result = a.combine(&b, SelectionOp::Replace, 10, 10);
+        // Replace should just return b
+        assert!(result.contains(Point { x: 5.0, y: 5.0 }));
+        assert!(!result.contains(Point { x: 1.0, y: 1.0 }));
+    }
+
+    #[test]
+    fn combine_add() {
+        let a = Selection::Rect(Rect {
+            x: 0.0, y: 0.0, width: 5.0, height: 5.0,
+        });
+        let b = Selection::Rect(Rect {
+            x: 3.0, y: 3.0, width: 5.0, height: 5.0,
+        });
+        let result = a.combine(&b, SelectionOp::Add, 10, 10);
+        // Both regions should be selected
+        assert!(result.contains(Point { x: 1.0, y: 1.0 }));
+        assert!(result.contains(Point { x: 6.0, y: 6.0 }));
+        // Outside both should not
+        assert!(!result.contains(Point { x: 9.0, y: 0.0 }));
+    }
+
+    #[test]
+    fn combine_subtract() {
+        let a = Selection::Rect(Rect {
+            x: 0.0, y: 0.0, width: 8.0, height: 8.0,
+        });
+        let b = Selection::Rect(Rect {
+            x: 4.0, y: 0.0, width: 8.0, height: 8.0,
+        });
+        let result = a.combine(&b, SelectionOp::Subtract, 10, 10);
+        // Left part of A should remain
+        assert!(result.contains(Point { x: 1.0, y: 1.0 }));
+        // Overlapping part should be removed
+        assert!(!result.contains(Point { x: 5.0, y: 1.0 }));
+    }
+
+    #[test]
+    fn combine_intersect() {
+        let a = Selection::Rect(Rect {
+            x: 0.0, y: 0.0, width: 6.0, height: 6.0,
+        });
+        let b = Selection::Rect(Rect {
+            x: 3.0, y: 3.0, width: 6.0, height: 6.0,
+        });
+        let result = a.combine(&b, SelectionOp::Intersect, 10, 10);
+        // Only the overlap should be selected
+        assert!(result.contains(Point { x: 4.0, y: 4.0 }));
+        // A-only region should not be selected
+        assert!(!result.contains(Point { x: 1.0, y: 1.0 }));
+        // B-only region should not be selected
+        assert!(!result.contains(Point { x: 7.0, y: 7.0 }));
+    }
+
+    #[test]
+    fn combine_add_with_none() {
+        let a = Selection::None;
+        let b = Selection::Rect(Rect {
+            x: 2.0, y: 2.0, width: 4.0, height: 4.0,
+        });
+        // None = everything selected, so add should be everything
+        let result = a.combine(&b, SelectionOp::Add, 8, 8);
+        assert!(result.contains(Point { x: 0.0, y: 0.0 }));
+        assert!(result.contains(Point { x: 4.0, y: 4.0 }));
     }
 
     #[test]

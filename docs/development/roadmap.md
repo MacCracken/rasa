@@ -1,8 +1,8 @@
 # Roadmap — Path to MVP v1
 
 > **Version**: 2026.3.13
-> **Status**: Phase 4 complete — Phase 5 next
-> **Tests**: 303 passing
+> **Status**: Phase 5 complete — Phase 6 next
+> **Tests**: 308 passing
 
 ---
 
@@ -68,18 +68,18 @@
 - [x] Native `.rasa` project format (magic header, JSON metadata, binary pixel data with sRGB conversion)
 - [x] Recent files / project catalog (SQLite via rusqlite — upsert, recent list, remove, clear)
 
-## Phase 5 — Basic Tools
+## Phase 5 — Basic Tools ✓
 
 **Goal**: Core editing tools for manual image editing.
 
-- [ ] Brush engine: size, opacity, hardness, pressure sensitivity
-- [ ] Eraser tool
-- [ ] Selection tools: rectangle, ellipse, freeform lasso
-- [ ] Selection operations: add, subtract, intersect, invert
-- [ ] Transform tool: move, scale, rotate, skew
-- [ ] Crop tool
-- [ ] Eyedropper / color picker
-- [ ] Fill and gradient tools
+- [x] Brush engine: size, opacity, hardness, pressure sensitivity, round/square tips, spacing
+- [x] Eraser tool (alpha reduction with same brush dynamics)
+- [x] Selection tools: rectangle, ellipse, freeform lasso (+ mask-based)
+- [x] Selection operations: add, subtract, intersect, invert (mask-based combine)
+- [x] Transform tool: move, scale, rotate, skew (affine transform with bilinear interpolation)
+- [x] Crop tool (region extraction with bounds clamping)
+- [x] Eyedropper / color picker (linear + sRGB u8 output)
+- [x] Fill and gradient tools (flood fill with tolerance, selection fill, linear gradient)
 
 ## Phase 6 — GPU Acceleration
 

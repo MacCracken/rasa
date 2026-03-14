@@ -33,3 +33,9 @@ All notable changes to Rasa will be documented in this file.
 - **rasa-storage**: Native `.rasa` project format (RASA magic, JSON header, binary pixel data)
 - **rasa-storage**: Recent files catalog backed by SQLite (rusqlite) with upsert, ordering, limits
 - **rasa-storage**: Format detection by file extension, alpha support queries, export settings
+- **rasa-core**: Selection combine operations (add, subtract, intersect via mask arithmetic)
+- **rasa-engine**: Brush engine with round/square tips, hardness falloff, pressure sensitivity, spacing
+- **rasa-engine**: Eraser tool (alpha reduction with brush dynamics)
+- **rasa-engine**: Flood fill with tolerance, selection fill, linear gradient
+- **rasa-engine**: Crop and affine transform with bilinear interpolation
+- **rasa-engine**: Eyedropper / color picker (linear + sRGB)
