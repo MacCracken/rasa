@@ -39,3 +39,7 @@ All notable changes to Rasa will be documented in this file.
 - **rasa-engine**: Flood fill with tolerance, selection fill, linear gradient
 - **rasa-engine**: Crop and affine transform with bilinear interpolation
 - **rasa-engine**: Eyedropper / color picker (linear + sRGB)
+- **rasa-gpu**: GPU compute pipeline — shader compilation, bind groups, dispatch, readback
+- **rasa-gpu**: 9 WGSL compute shaders: composite (Normal/Multiply/Screen), invert, grayscale, brightness/contrast, blur H/V, brush dab
+- **rasa-gpu**: GpuBackend wired to actual compute dispatch for compositing and per-pixel filters
+- **rasa-gpu**: Performance benchmark framework with CPU baseline and GPU comparison

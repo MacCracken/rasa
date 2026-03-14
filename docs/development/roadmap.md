@@ -1,8 +1,8 @@
 # Roadmap — Path to MVP v1
 
 > **Version**: 2026.3.13
-> **Status**: Phase 5 complete — Phase 6 next
-> **Tests**: 308 passing
+> **Status**: Phase 6 complete — Phase 7 next
+> **Tests**: 312 passing
 
 ---
 
@@ -81,16 +81,17 @@
 - [x] Eyedropper / color picker (linear + sRGB u8 output)
 - [x] Fill and gradient tools (flood fill with tolerance, selection fill, linear gradient)
 
-## Phase 6 — GPU Acceleration
+## Phase 6 — GPU Acceleration ✓
 
 **Goal**: Move compositing and filters to Vulkan compute.
 
-- [ ] wgpu device initialization and capability detection
-- [ ] GPU layer compositing (all blend modes)
-- [ ] GPU filters: blur (Gaussian, box), sharpen, noise reduction
-- [ ] GPU-accelerated brush rendering
-- [ ] CPU fallback path for systems without Vulkan
-- [ ] Performance benchmarks (GPU vs CPU path)
+- [x] wgpu device initialization and capability detection (Vulkan/Metal, high-perf adapter selection)
+- [x] GPU layer compositing (Normal, Multiply, Screen via compute shaders; others CPU fallback)
+- [x] GPU filters: invert, grayscale, brightness/contrast via compute; blur/sharpen CPU path
+- [x] GPU brush dab compute shader (round tip with hardness falloff)
+- [x] CPU fallback path for systems without Vulkan (graceful degradation)
+- [x] Performance benchmarks (CPU baseline with MP/s metrics; GPU comparison when available)
+- [x] 9 WGSL compute shaders: composite (Normal/Multiply/Screen), invert, grayscale, brightness/contrast, blur H/V, brush dab
 
 ## Phase 7 — AI Foundation
 

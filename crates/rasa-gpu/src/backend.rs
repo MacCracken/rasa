@@ -115,11 +115,9 @@ pub fn select_backend(force_cpu: bool) -> Box<dyn RenderBackend> {
 
 /// GPU-accelerated backend.
 ///
-/// Currently delegates to CPU implementations while compute shaders
-/// are being developed. The device is held ready for when shader
-/// pipelines are wired up.
+/// Uses wgpu compute shaders for supported operations, with CPU fallback
+/// for operations where GPU dispatch overhead exceeds the benefit.
 pub struct GpuBackend {
-    #[allow(dead_code)]
     device: super::device::GpuDevice,
 }
 
@@ -133,43 +131,78 @@ impl RenderBackend for GpuBackend {
     }
 
     fn composite(&self, dst: &mut PixelBuffer, src: &PixelBuffer, mode: BlendMode, opacity: f32) {
-        // TODO: GPU compute shader path
-        // For now, fall back to CPU
+        let shader = match mode {
+            BlendMode::Normal => super::kernels::COMPOSITE_NORMAL,
+            BlendMode::Multiply => super::kernels::COMPOSITE_MULTIPLY,
+            BlendMode::Screen => super::kernels::COMPOSITE_SCREEN,
+            // Other blend modes fall back to CPU
+            _ => {
+                CpuBackend.composite(dst, src, mode, opacity);
+                return;
+            }
+        };
         let w = dst.width.min(src.width);
         let h = dst.height.min(src.height);
-        for y in 0..h {
-            for x in 0..w {
-                let base = dst.get(x, y).unwrap();
-                let top = src.get(x, y).unwrap();
-                let result = rasa_core::blend::blend(base, top, mode, opacity);
-                dst.set(x, y, result);
-            }
-        }
+        super::pipeline::dispatch_composite_shader(&self.device, dst, src, shader, w, h, opacity);
     }
 
     fn gaussian_blur(&self, buf: &mut PixelBuffer, radius: u32) {
-        // TODO: GPU compute shader path
+        // Blur requires multi-pass with intermediate buffers — CPU path for now
+        // (GPU blur pipeline needs separate horizontal+vertical dispatch with kernel upload)
         cpu_gaussian_blur(buf, radius);
     }
 
     fn sharpen(&self, buf: &mut PixelBuffer, radius: u32, amount: f32) {
-        // TODO: GPU compute shader path
         cpu_sharpen(buf, radius, amount);
     }
 
     fn brightness_contrast(&self, buf: &mut PixelBuffer, brightness: f32, contrast: f32) {
-        // TODO: GPU compute shader path
-        CpuBackend.brightness_contrast(buf, brightness, contrast);
+        let factor = (1.0 + contrast) / (1.0 - contrast.min(0.9999));
+        let pixel_count = (buf.width * buf.height) as u32;
+        // Params: count, brightness, contrast_factor, padding
+        let params: [u32; 4] = [
+            pixel_count,
+            brightness.to_bits(),
+            factor.to_bits(),
+            0,
+        ];
+        let params_bytes: &[u8] = unsafe {
+            std::slice::from_raw_parts(params.as_ptr() as *const u8, 16)
+        };
+        super::pipeline::dispatch_pixel_shader(
+            &self.device,
+            buf,
+            super::kernels::BRIGHTNESS_CONTRAST,
+            params_bytes,
+        );
     }
 
     fn invert(&self, buf: &mut PixelBuffer) {
-        // TODO: GPU compute shader path
-        CpuBackend.invert(buf);
+        let pixel_count = (buf.width * buf.height) as u32;
+        let params: [u32; 4] = [pixel_count, 0, 0, 0];
+        let params_bytes: &[u8] = unsafe {
+            std::slice::from_raw_parts(params.as_ptr() as *const u8, 16)
+        };
+        super::pipeline::dispatch_pixel_shader(
+            &self.device,
+            buf,
+            super::kernels::INVERT,
+            params_bytes,
+        );
     }
 
     fn grayscale(&self, buf: &mut PixelBuffer) {
-        // TODO: GPU compute shader path
-        CpuBackend.grayscale(buf);
+        let pixel_count = (buf.width * buf.height) as u32;
+        let params: [u32; 4] = [pixel_count, 0, 0, 0];
+        let params_bytes: &[u8] = unsafe {
+            std::slice::from_raw_parts(params.as_ptr() as *const u8, 16)
+        };
+        super::pipeline::dispatch_pixel_shader(
+            &self.device,
+            buf,
+            super::kernels::GRAYSCALE,
+            params_bytes,
+        );
     }
 }
 
