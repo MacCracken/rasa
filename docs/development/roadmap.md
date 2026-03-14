@@ -1,8 +1,8 @@
 # Roadmap — Path to MVP v1
 
 > **Version**: 2026.3.13
-> **Status**: Phase 1 complete — Phase 2 next
-> **Tests**: 141 passing
+> **Status**: Phase 2 complete — Phase 3 next
+> **Tests**: 216 passing
 
 ---
 
@@ -35,16 +35,16 @@
 - [x] Serde round-trip tests for all types (32 integration tests)
 - [x] Error type hierarchy (domain-specific variants for layers, selection, transform, storage, AI, history)
 
-## Phase 2 — Canvas & Layers
+## Phase 2 — Canvas & Layers ✓
 
 **Goal**: Working layer system with compositing.
 
-- [ ] Blend mode implementations (Normal, Multiply, Screen, Overlay, etc.)
-- [ ] Layer compositing pipeline (CPU)
-- [ ] Layer operations: reorder, duplicate, merge, flatten
-- [ ] Layer groups with nested compositing
-- [ ] Opacity and visibility
-- [ ] Undo/redo command system
+- [x] Blend mode implementations (12 modes: Normal, Multiply, Screen, Overlay, Darken, Lighten, ColorDodge, ColorBurn, SoftLight, HardLight, Difference, Exclusion)
+- [x] Layer compositing pipeline (CPU) with Porter-Duff alpha compositing
+- [x] Layer operations: reorder, duplicate, merge down, flatten visible
+- [x] Layer groups with nested compositing (recursive group rendering)
+- [x] Opacity and visibility
+- [x] Undo/redo command system (all operations reversible: merge, group, ungroup)
 
 ## Phase 3 — Rendering Pipeline
 

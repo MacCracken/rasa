@@ -1,6 +1,7 @@
 use rasa_core::Document;
 use rasa_core::blend::blend;
-use rasa_core::color::Color;
+use rasa_core::color::{BlendMode, Color};
+use rasa_core::layer::{Layer, LayerKind};
 use rasa_core::pixel::PixelBuffer;
 
 /// Flatten all visible layers in a document into a single pixel buffer (CPU path).
@@ -9,25 +10,47 @@ pub fn composite(doc: &Document) -> PixelBuffer {
     let mut output = PixelBuffer::filled(w, h, Color::TRANSPARENT);
 
     for layer in &doc.layers {
-        if !layer.visible || layer.opacity <= 0.0 {
-            continue;
-        }
-
-        let Some(layer_buf) = doc.get_pixels(layer.id) else {
-            continue;
-        };
-
-        composite_layer(&mut output, layer_buf, layer.blend_mode, layer.opacity);
+        composite_layer_tree(&mut output, layer, doc, w, h);
     }
 
     output
+}
+
+/// Recursively composite a layer (handles groups with nested children).
+fn composite_layer_tree(
+    dst: &mut PixelBuffer,
+    layer: &Layer,
+    doc: &Document,
+    w: u32,
+    h: u32,
+) {
+    if !layer.visible || layer.opacity <= 0.0 {
+        return;
+    }
+
+    match &layer.kind {
+        LayerKind::Group { children } => {
+            // Composite children into a temporary buffer, then blend group onto dst
+            let mut group_buf = PixelBuffer::filled(w, h, Color::TRANSPARENT);
+            for child in children {
+                composite_layer_tree(&mut group_buf, child, doc, w, h);
+            }
+            composite_layer(dst, &group_buf, layer.blend_mode, layer.opacity);
+        }
+        _ => {
+            let Some(layer_buf) = doc.get_pixels(layer.id) else {
+                return;
+            };
+            composite_layer(dst, layer_buf, layer.blend_mode, layer.opacity);
+        }
+    }
 }
 
 /// Composite a single layer buffer onto a destination buffer.
 pub fn composite_layer(
     dst: &mut PixelBuffer,
     src: &PixelBuffer,
-    mode: rasa_core::color::BlendMode,
+    mode: BlendMode,
     opacity: f32,
 ) {
     let w = dst.width.min(src.width);
@@ -162,6 +185,65 @@ mod tests {
         assert!(approx_eq(px.r, 0.5));
         assert!(approx_eq(px.g, 0.5));
         assert!(approx_eq(px.b, 0.5));
+    }
+
+    #[test]
+    fn composite_group_layer() {
+        let mut doc = Document::new("Test", 2, 2);
+        let l1 = Layer::new_raster("Red", 2, 2);
+        let l1_id = l1.id;
+        let l2 = Layer::new_raster("Blue", 2, 2);
+        let l2_id = l2.id;
+        doc.add_layer(l1);
+        doc.add_layer(l2);
+        // Fill red
+        if let Some(buf) = doc.get_pixels_mut(l1_id) {
+            for y in 0..2 {
+                for x in 0..2 {
+                    buf.set(x, y, Color::new(1.0, 0.0, 0.0, 1.0));
+                }
+            }
+        }
+        // Fill blue
+        if let Some(buf) = doc.get_pixels_mut(l2_id) {
+            for y in 0..2 {
+                for x in 0..2 {
+                    buf.set(x, y, Color::new(0.0, 0.0, 1.0, 1.0));
+                }
+            }
+        }
+        // Group the two layers
+        doc.group_layers(&[l1_id, l2_id]).unwrap();
+        assert_eq!(doc.layers.len(), 2); // Background + Group
+
+        let result = composite(&doc);
+        // Blue is on top of red in the group, both opaque, so result should be blue
+        let px = result.get(0, 0).unwrap();
+        assert!(approx_eq(px.r, 0.0));
+        assert!(approx_eq(px.b, 1.0));
+    }
+
+    #[test]
+    fn composite_hidden_group_ignored() {
+        let mut doc = Document::new("Test", 2, 2);
+        let l = Layer::new_raster("Red", 2, 2);
+        let lid = l.id;
+        doc.add_layer(l);
+        if let Some(buf) = doc.get_pixels_mut(lid) {
+            for y in 0..2 {
+                for x in 0..2 {
+                    buf.set(x, y, Color::new(1.0, 0.0, 0.0, 1.0));
+                }
+            }
+        }
+        let group_id = doc.group_layers(&[lid]).unwrap();
+        doc.set_layer_visibility(group_id, false).unwrap();
+        let result = composite(&doc);
+        // Group is hidden, so only white background
+        let px = result.get(0, 0).unwrap();
+        assert!(approx_eq(px.r, 1.0));
+        assert!(approx_eq(px.g, 1.0));
+        assert!(approx_eq(px.b, 1.0));
     }
 
     #[test]

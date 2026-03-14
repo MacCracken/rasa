@@ -18,3 +18,7 @@ All notable changes to Rasa will be documented in this file.
 - **rasa-core**: 32 serde round-trip integration tests for all serializable types
 - **rasa-core**: sRGB/linear/HSL color space conversions
 - **rasa-core**: 2D affine transform with composition and inverse
+- **rasa-core**: Merge down operation — composites upper layer pixels onto lower layer
+- **rasa-core**: Layer grouping and ungrouping with undo/redo support
+- **rasa-engine**: Recursive group compositing — groups rendered to intermediate buffer then blended
+- **rasa-engine**: CPU compositing pipeline (flatten all visible layers with blend modes and opacity)

@@ -227,6 +227,181 @@ impl Document {
             .collect()
     }
 
+    // ── Merge / Group / Flatten ─────────────────────────
+
+    /// Merge a layer down into the layer below it. Both must be raster layers.
+    /// The upper layer is removed and its pixels are composited onto the lower layer.
+    pub fn merge_down(&mut self, upper_id: Uuid) -> Result<(), RasaError> {
+        let upper_idx = self
+            .layer_index(upper_id)
+            .ok_or(RasaError::LayerNotFound(upper_id))?;
+        if upper_idx == 0 {
+            return Err(RasaError::Other(
+                "cannot merge down: no layer below".into(),
+            ));
+        }
+        let lower_idx = upper_idx - 1;
+
+        let upper_layer = self.layers[upper_idx].clone();
+        let lower_layer = self.layers[lower_idx].clone();
+
+        // Composite upper onto lower
+        let (lower_w, lower_h) = match lower_layer.kind {
+            LayerKind::Raster { width, height } => (width, height),
+            _ => {
+                return Err(RasaError::Other(
+                    "cannot merge: lower layer is not raster".into(),
+                ))
+            }
+        };
+
+        let upper_buf = self
+            .get_pixels(upper_layer.id)
+            .ok_or_else(|| RasaError::Other("upper layer has no pixel data".into()))?
+            .clone();
+
+        let lower_buf = self
+            .get_pixels_mut(lower_layer.id)
+            .ok_or_else(|| RasaError::Other("lower layer has no pixel data".into()))?;
+
+        let w = lower_w.min(upper_buf.width);
+        let h = lower_h.min(upper_buf.height);
+        for y in 0..h {
+            for x in 0..w {
+                let base = lower_buf.get(x, y).unwrap();
+                let top = upper_buf.get(x, y).unwrap();
+                let result =
+                    crate::blend::blend(base, top, upper_layer.blend_mode, upper_layer.opacity);
+                lower_buf.set(x, y, result);
+            }
+        }
+
+        // Create the merged layer snapshot for undo
+        let merged = self.layers[lower_idx].clone();
+
+        // Remove upper layer
+        self.layers.remove(upper_idx);
+        self.pixel_data.retain(|(id, _)| *id != upper_layer.id);
+
+        self.active_layer = Some(lower_layer.id);
+        self.push_command(Command::MergeLayers {
+            upper_layer: Box::new(upper_layer),
+            upper_index: upper_idx,
+            lower_layer: Box::new(lower_layer),
+            lower_index: lower_idx,
+            merged: Box::new(merged),
+        });
+        Ok(())
+    }
+
+    /// Group the specified layers into a new group layer.
+    /// Layers must be contiguous in the stack.
+    pub fn group_layers(&mut self, layer_ids: &[Uuid]) -> Result<Uuid, RasaError> {
+        if layer_ids.is_empty() {
+            return Err(RasaError::Other("no layers to group".into()));
+        }
+
+        // Collect indices and verify they exist
+        let mut indices: Vec<usize> = layer_ids
+            .iter()
+            .map(|id| self.layer_index(*id).ok_or(RasaError::LayerNotFound(*id)))
+            .collect::<Result<Vec<_>, _>>()?;
+        indices.sort();
+
+        // Verify contiguous
+        for i in 1..indices.len() {
+            if indices[i] != indices[i - 1] + 1 {
+                return Err(RasaError::Other(
+                    "layers must be contiguous to group".into(),
+                ));
+            }
+        }
+
+        let group_index = indices[0];
+
+        // Collect layers with their indices (for undo)
+        let layers_with_indices: Vec<(Layer, usize)> = indices
+            .iter()
+            .rev()
+            .map(|&idx| (self.layers[idx].clone(), idx))
+            .collect();
+
+        // Extract the children (remove from highest index first)
+        let mut children = Vec::new();
+        for &idx in indices.iter().rev() {
+            children.push(self.layers.remove(idx));
+        }
+        children.reverse(); // restore original order
+
+        // Create group layer
+        let group = Layer {
+            id: Uuid::new_v4(),
+            name: "Group".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+            blend_mode: BlendMode::default(),
+            bounds: crate::geometry::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: self.size.width as f64,
+                height: self.size.height as f64,
+            },
+            kind: LayerKind::Group { children },
+        };
+        let group_id = group.id;
+
+        let cmd = Command::GroupLayers {
+            layer_ids: layer_ids.to_vec(),
+            layers: layers_with_indices,
+            group: Box::new(group.clone()),
+            group_index,
+        };
+        self.layers.insert(group_index, group);
+        self.active_layer = Some(group_id);
+        self.push_command(cmd);
+        Ok(group_id)
+    }
+
+    /// Ungroup a group layer, replacing it with its children in the stack.
+    pub fn ungroup_layer(&mut self, group_id: Uuid) -> Result<Vec<Uuid>, RasaError> {
+        let group_idx = self
+            .layer_index(group_id)
+            .ok_or(RasaError::LayerNotFound(group_id))?;
+
+        let group_layer = self.layers[group_idx].clone();
+        let children = match &group_layer.kind {
+            LayerKind::Group { children } => children.clone(),
+            _ => {
+                return Err(RasaError::Other("layer is not a group".into()));
+            }
+        };
+
+        // Remove the group
+        self.layers.remove(group_idx);
+
+        // Collect children info for undo
+        let children_with_indices: Vec<(Layer, usize)> = children
+            .iter()
+            .enumerate()
+            .map(|(i, l)| (l.clone(), group_idx + i))
+            .collect();
+
+        // Insert children at the group's position
+        let child_ids: Vec<Uuid> = children.iter().map(|l| l.id).collect();
+        for (i, child) in children.into_iter().enumerate() {
+            self.layers.insert(group_idx + i, child);
+        }
+
+        self.active_layer = child_ids.first().copied();
+        self.push_command(Command::UngroupLayer {
+            group: Box::new(group_layer),
+            group_index: group_idx,
+            children: children_with_indices,
+        });
+        Ok(child_ids)
+    }
+
     // ── Undo / Redo ────────────────────────────────────
 
     fn history_mut(&mut self) -> &mut History {
@@ -331,7 +506,54 @@ impl Document {
                 self.layers.remove(*index);
                 self.pixel_data.retain(|(id, _)| *id != new_layer.id);
             }
-            _ => {}
+            Command::MergeLayers {
+                upper_layer,
+                upper_index,
+                lower_layer,
+                lower_index,
+                ..
+            } => {
+                // Undo merge: restore the original lower layer and re-insert upper
+                self.layers[*lower_index] = *lower_layer.clone();
+                // Restore lower layer's pixel data
+                if let LayerKind::Raster { width, height } = lower_layer.kind {
+                    // Replace pixel data with a fresh buffer (original pixels lost in merge)
+                    self.pixel_data.retain(|(id, _)| *id != lower_layer.id);
+                    self.pixel_data
+                        .push((lower_layer.id, PixelBuffer::new(width, height)));
+                }
+                // Re-insert upper layer
+                if let LayerKind::Raster { width, height } = upper_layer.kind {
+                    self.pixel_data
+                        .push((upper_layer.id, PixelBuffer::new(width, height)));
+                }
+                self.layers.insert(*upper_index, *upper_layer.clone());
+            }
+            Command::GroupLayers {
+                layers,
+                group_index,
+                ..
+            } => {
+                // Undo group: remove the group, re-insert original layers
+                self.layers.remove(*group_index);
+                let mut sorted = layers.clone();
+                sorted.sort_by_key(|(_, idx)| *idx);
+                for (layer, idx) in sorted {
+                    self.layers.insert(idx, layer);
+                }
+            }
+            Command::UngroupLayer {
+                group,
+                group_index,
+                children,
+                ..
+            } => {
+                // Undo ungroup: remove children, re-insert group
+                for _ in 0..children.len() {
+                    self.layers.remove(*group_index);
+                }
+                self.layers.insert(*group_index, *group.clone());
+            }
         }
     }
 
@@ -407,7 +629,48 @@ impl Document {
                 }
                 self.layers.insert(*index, new_layer.clone());
             }
-            _ => {}
+            Command::MergeLayers {
+                upper_layer,
+                upper_index: _,
+                merged,
+                lower_index,
+                ..
+            } => {
+                // Redo merge: replace lower with merged, remove upper
+                self.layers[*lower_index] = *merged.clone();
+                // Find and remove the upper layer
+                if let Some(idx) = self.layers.iter().position(|l| l.id == upper_layer.id) {
+                    self.layers.remove(idx);
+                    self.pixel_data.retain(|(id, _)| *id != upper_layer.id);
+                }
+            }
+            Command::GroupLayers {
+                group,
+                group_index,
+                layers,
+                ..
+            } => {
+                // Redo group: remove original layers (highest index first), insert group
+                let mut indices: Vec<usize> = layers.iter().map(|(_, idx)| *idx).collect();
+                indices.sort();
+                for &idx in indices.iter().rev() {
+                    self.layers.remove(idx);
+                }
+                self.layers.insert(*group_index, *group.clone());
+            }
+            Command::UngroupLayer {
+                group_index,
+                children,
+                ..
+            } => {
+                // Redo ungroup: remove group, insert children
+                self.layers.remove(*group_index);
+                let mut sorted = children.clone();
+                sorted.sort_by_key(|(_, idx)| *idx);
+                for (layer, idx) in sorted {
+                    self.layers.insert(idx, layer);
+                }
+            }
         }
     }
 }
@@ -636,5 +899,178 @@ mod tests {
         // new() doesn't record the initial background as a command
         let result = doc.undo();
         assert!(result.is_err());
+    }
+
+    // ── Merge tests ─────────────────────────────────────
+
+    #[test]
+    fn merge_down_combines_layers() {
+        let mut doc = Document::new("Test", 4, 4);
+        let l = Layer::new_raster("Top", 4, 4);
+        let top_id = l.id;
+        doc.add_layer(l);
+        // Fill top layer with red
+        if let Some(buf) = doc.get_pixels_mut(top_id) {
+            for y in 0..4 {
+                for x in 0..4 {
+                    buf.set(x, y, crate::color::Color::new(1.0, 0.0, 0.0, 1.0));
+                }
+            }
+        }
+        assert_eq!(doc.layers.len(), 2);
+        doc.merge_down(top_id).unwrap();
+        assert_eq!(doc.layers.len(), 1);
+        assert_eq!(doc.layers[0].name, "Background");
+    }
+
+    #[test]
+    fn merge_down_bottom_layer_errors() {
+        let doc_bg_id = {
+            let doc = Document::new("Test", 4, 4);
+            doc.layers[0].id
+        };
+        let mut doc = Document::new("Test", 4, 4);
+        let bg_id = doc.layers[0].id;
+        let result = doc.merge_down(bg_id);
+        assert!(result.is_err());
+        let _ = doc_bg_id; // just to suppress warning
+    }
+
+    #[test]
+    fn merge_down_nonexistent_errors() {
+        let mut doc = Document::new("Test", 4, 4);
+        let result = doc.merge_down(Uuid::new_v4());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn undo_merge_down() {
+        let mut doc = Document::new("Test", 4, 4);
+        let l = Layer::new_raster("Top", 4, 4);
+        let top_id = l.id;
+        doc.add_layer(l);
+        assert_eq!(doc.layers.len(), 2);
+        doc.merge_down(top_id).unwrap();
+        assert_eq!(doc.layers.len(), 1);
+        doc.undo().unwrap();
+        assert_eq!(doc.layers.len(), 2);
+        assert_eq!(doc.layers[1].name, "Top");
+    }
+
+    // ── Group tests ─────────────────────────────────────
+
+    #[test]
+    fn group_layers_creates_group() {
+        let mut doc = Document::new("Test", 10, 10);
+        let l1 = Layer::new_raster("Layer 1", 10, 10);
+        let l2 = Layer::new_raster("Layer 2", 10, 10);
+        let id1 = l1.id;
+        let id2 = l2.id;
+        doc.add_layer(l1);
+        doc.add_layer(l2);
+        assert_eq!(doc.layers.len(), 3);
+
+        let group_id = doc.group_layers(&[id1, id2]).unwrap();
+        assert_eq!(doc.layers.len(), 2); // Background + Group
+        let group = doc.find_layer(group_id).unwrap();
+        assert_eq!(group.name, "Group");
+        if let LayerKind::Group { children } = &group.kind {
+            assert_eq!(children.len(), 2);
+            assert_eq!(children[0].name, "Layer 1");
+            assert_eq!(children[1].name, "Layer 2");
+        } else {
+            panic!("expected Group");
+        }
+    }
+
+    #[test]
+    fn group_empty_errors() {
+        let mut doc = Document::new("Test", 10, 10);
+        let result = doc.group_layers(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn group_noncontiguous_errors() {
+        let mut doc = Document::new("Test", 10, 10);
+        let l1 = Layer::new_raster("L1", 10, 10);
+        let l2 = Layer::new_raster("L2", 10, 10);
+        let l3 = Layer::new_raster("L3", 10, 10);
+        let id1 = l1.id;
+        let id3 = l3.id;
+        doc.add_layer(l1);
+        doc.add_layer(l2);
+        doc.add_layer(l3);
+        // L1 is at index 1, L3 is at index 3 — not contiguous
+        let result = doc.group_layers(&[id1, id3]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn undo_group_layers() {
+        let mut doc = Document::new("Test", 10, 10);
+        let l1 = Layer::new_raster("Layer 1", 10, 10);
+        let l2 = Layer::new_raster("Layer 2", 10, 10);
+        let id1 = l1.id;
+        let id2 = l2.id;
+        doc.add_layer(l1);
+        doc.add_layer(l2);
+        doc.group_layers(&[id1, id2]).unwrap();
+        assert_eq!(doc.layers.len(), 2);
+        doc.undo().unwrap();
+        assert_eq!(doc.layers.len(), 3);
+        assert_eq!(doc.layers[1].name, "Layer 1");
+        assert_eq!(doc.layers[2].name, "Layer 2");
+    }
+
+    // ── Ungroup tests ───────────────────────────────────
+
+    #[test]
+    fn ungroup_layer_restores_children() {
+        let mut doc = Document::new("Test", 10, 10);
+        let l1 = Layer::new_raster("Layer 1", 10, 10);
+        let l2 = Layer::new_raster("Layer 2", 10, 10);
+        let id1 = l1.id;
+        let id2 = l2.id;
+        doc.add_layer(l1);
+        doc.add_layer(l2);
+        let group_id = doc.group_layers(&[id1, id2]).unwrap();
+        assert_eq!(doc.layers.len(), 2);
+
+        let child_ids = doc.ungroup_layer(group_id).unwrap();
+        assert_eq!(doc.layers.len(), 3);
+        assert_eq!(child_ids.len(), 2);
+        assert_eq!(doc.layers[1].name, "Layer 1");
+        assert_eq!(doc.layers[2].name, "Layer 2");
+    }
+
+    #[test]
+    fn ungroup_non_group_errors() {
+        let mut doc = Document::new("Test", 10, 10);
+        let bg_id = doc.layers[0].id;
+        let result = doc.ungroup_layer(bg_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn undo_ungroup() {
+        let mut doc = Document::new("Test", 10, 10);
+        let l1 = Layer::new_raster("Layer 1", 10, 10);
+        let l2 = Layer::new_raster("Layer 2", 10, 10);
+        let id1 = l1.id;
+        let id2 = l2.id;
+        doc.add_layer(l1);
+        doc.add_layer(l2);
+        let group_id = doc.group_layers(&[id1, id2]).unwrap();
+        doc.ungroup_layer(group_id).unwrap();
+        assert_eq!(doc.layers.len(), 3);
+        doc.undo().unwrap();
+        assert_eq!(doc.layers.len(), 2);
+        // The group should be back
+        if let LayerKind::Group { children } = &doc.layers[1].kind {
+            assert_eq!(children.len(), 2);
+        } else {
+            panic!("expected Group after undo");
+        }
     }
 }
