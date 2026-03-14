@@ -9,9 +9,15 @@ license.workspace = true
 [dependencies]
 rasa-core = { workspace = true }
 rasa-engine = { workspace = true }
+rasa-storage = { workspace = true }
+image = { workspace = true }
+uuid = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
