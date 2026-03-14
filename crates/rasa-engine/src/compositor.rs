@@ -4,6 +4,8 @@ use rasa_core::color::{BlendMode, Color};
 use rasa_core::layer::{Layer, LayerKind};
 use rasa_core::pixel::PixelBuffer;
 
+use crate::filters;
+
 /// Flatten all visible layers in a document into a single pixel buffer (CPU path).
 pub fn composite(doc: &Document) -> PixelBuffer {
     let (w, h) = (doc.size.width, doc.size.height);
@@ -36,6 +38,10 @@ fn composite_layer_tree(
                 composite_layer_tree(&mut group_buf, child, doc, w, h);
             }
             composite_layer(dst, &group_buf, layer.blend_mode, layer.opacity);
+        }
+        LayerKind::Adjustment(adj) => {
+            // Adjustment layers modify the composited result below them
+            filters::apply_adjustment(dst, adj);
         }
         _ => {
             let Some(layer_buf) = doc.get_pixels(layer.id) else {
@@ -244,6 +250,76 @@ mod tests {
         assert!(approx_eq(px.r, 1.0));
         assert!(approx_eq(px.g, 1.0));
         assert!(approx_eq(px.b, 1.0));
+    }
+
+    #[test]
+    fn composite_adjustment_layer() {
+        use rasa_core::geometry::Rect;
+        use rasa_core::layer::{Adjustment, LayerKind};
+
+        let mut doc = Document::new("Test", 2, 2);
+        // Background is white (1.0, 1.0, 1.0)
+
+        // Add a brightness adjustment layer that darkens
+        let adj_layer = Layer {
+            id: uuid::Uuid::new_v4(),
+            name: "Darken".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            bounds: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 2.0,
+                height: 2.0,
+            },
+            kind: LayerKind::Adjustment(Adjustment::BrightnessContrast {
+                brightness: -0.3,
+                contrast: 0.0,
+            }),
+        };
+        doc.add_layer(adj_layer);
+
+        let result = composite(&doc);
+        let px = result.get(0, 0).unwrap();
+        // White with -0.3 brightness should be darker
+        assert!(px.r < 1.0);
+        assert!(px.g < 1.0);
+        assert!(px.b < 1.0);
+    }
+
+    #[test]
+    fn composite_hidden_adjustment_ignored() {
+        use rasa_core::geometry::Rect;
+        use rasa_core::layer::{Adjustment, LayerKind};
+
+        let mut doc = Document::new("Test", 2, 2);
+        let adj_layer = Layer {
+            id: uuid::Uuid::new_v4(),
+            name: "Hidden Adj".into(),
+            visible: false,
+            locked: false,
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            bounds: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 2.0,
+                height: 2.0,
+            },
+            kind: LayerKind::Adjustment(Adjustment::BrightnessContrast {
+                brightness: -0.5,
+                contrast: 0.0,
+            }),
+        };
+        doc.add_layer(adj_layer);
+
+        let result = composite(&doc);
+        let px = result.get(0, 0).unwrap();
+        // Hidden adjustment should not affect output — still white
+        assert!(approx_eq(px.r, 1.0));
+        assert!(approx_eq(px.g, 1.0));
     }
 
     #[test]

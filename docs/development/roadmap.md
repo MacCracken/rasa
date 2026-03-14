@@ -1,8 +1,8 @@
 # Roadmap — Path to MVP v1
 
 > **Version**: 2026.3.13
-> **Status**: Phase 2 complete — Phase 3 next
-> **Tests**: 216 passing
+> **Status**: Phase 3 complete — Phase 4 next
+> **Tests**: 218 passing
 
 ---
 
@@ -46,15 +46,16 @@
 - [x] Opacity and visibility
 - [x] Undo/redo command system (all operations reversible: merge, group, ungroup)
 
-## Phase 3 — Rendering Pipeline
+## Phase 3 — Rendering Pipeline ✓
 
 **Goal**: CPU-based renderer that produces correct output.
 
-- [ ] Document renderer — flatten all layers to RGBA buffer
-- [ ] Filter pipeline: brightness/contrast, hue/saturation, curves, levels
-- [ ] Color management: sRGB, linear, Display P3
-- [ ] Tile-based rendering for large documents
-- [ ] Render cache (only re-render changed regions)
+- [x] Document renderer — flatten all layers to RGBA buffer (`renderer::render()`, `to_rgba_bytes()`)
+- [x] Filter pipeline: brightness/contrast, hue/saturation, curves, levels + blur, sharpen, invert, grayscale
+- [x] Color management: sRGB, linear, Display P3 (linear-to-sRGB conversion in render path)
+- [x] Tile-based rendering for large documents (256x256 tiles via `tile_coords()`)
+- [x] Render cache — dirty tile tracking with region invalidation (`RenderCache`)
+- [x] Adjustment layer compositing — adjustment layers apply filters during compositing
 
 ## Phase 4 — Storage & Formats
 

@@ -22,3 +22,9 @@ All notable changes to Rasa will be documented in this file.
 - **rasa-core**: Layer grouping and ungrouping with undo/redo support
 - **rasa-engine**: Recursive group compositing — groups rendered to intermediate buffer then blended
 - **rasa-engine**: CPU compositing pipeline (flatten all visible layers with blend modes and opacity)
+- **rasa-engine**: Document renderer with sRGB/linear/Display P3 color space conversion
+- **rasa-engine**: Filter pipeline: brightness/contrast, hue/saturation, curves, levels, gaussian blur, sharpen, invert, grayscale
+- **rasa-engine**: Adjustment layer compositing — adjustment layers apply filters inline during compositing
+- **rasa-engine**: Tile-based rendering (256x256 tiles) with dirty-region render cache
+- **rasa-engine**: Region rendering for partial/incremental updates
+- **rasa-engine**: RGBA u8 byte output for display/export
