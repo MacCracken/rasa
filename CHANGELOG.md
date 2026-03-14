@@ -28,3 +28,8 @@ All notable changes to Rasa will be documented in this file.
 - **rasa-engine**: Tile-based rendering (256x256 tiles) with dirty-region render cache
 - **rasa-engine**: Region rendering for partial/incremental updates
 - **rasa-engine**: RGBA u8 byte output for display/export
+- **rasa-storage**: PNG, JPEG, WebP, TIFF, BMP, GIF import/export with sRGB/linear color conversion
+- **rasa-storage**: JPEG quality settings wired to encoder (1-100 via `JpegEncoder::new_with_quality`)
+- **rasa-storage**: Native `.rasa` project format (RASA magic, JSON header, binary pixel data)
+- **rasa-storage**: Recent files catalog backed by SQLite (rusqlite) with upsert, ordering, limits
+- **rasa-storage**: Format detection by file extension, alpha support queries, export settings

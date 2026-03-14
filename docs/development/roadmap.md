@@ -1,8 +1,8 @@
 # Roadmap — Path to MVP v1
 
 > **Version**: 2026.3.13
-> **Status**: Phase 3 complete — Phase 4 next
-> **Tests**: 218 passing
+> **Status**: Phase 4 complete — Phase 5 next
+> **Tests**: 303 passing
 
 ---
 
@@ -57,16 +57,16 @@
 - [x] Render cache — dirty tile tracking with region invalidation (`RenderCache`)
 - [x] Adjustment layer compositing — adjustment layers apply filters during compositing
 
-## Phase 4 — Storage & Formats
+## Phase 4 — Storage & Formats ✓
 
 **Goal**: Open and save real image files.
 
-- [ ] PNG import/export
-- [ ] JPEG import/export (quality settings)
-- [ ] WebP import/export
-- [ ] TIFF import/export
-- [ ] Native `.rasa` project format (layers + history + metadata)
-- [ ] Recent files / project catalog (SQLite)
+- [x] PNG import/export
+- [x] JPEG import/export (quality settings wired to encoder via `JpegEncoder::new_with_quality`)
+- [x] WebP import/export
+- [x] TIFF import/export (+ BMP, GIF)
+- [x] Native `.rasa` project format (magic header, JSON metadata, binary pixel data with sRGB conversion)
+- [x] Recent files / project catalog (SQLite via rusqlite — upsert, recent list, remove, clear)
 
 ## Phase 5 — Basic Tools
 
