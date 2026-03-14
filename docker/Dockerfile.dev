@@ -1,0 +1,23 @@
+# Rasa — development container on AGNOS
+FROM ghcr.io/maccracken/agnosticos:latest
+
+USER root
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cmake pkg-config libssl-dev git build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust toolchain (pinned to stable)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+ENV RUSTUP_UPDATE_MODE=no-self-update
+
+RUN cargo install cargo-watch --locked
+
+WORKDIR /workspace
+VOLUME /workspace
+
+ENV AGNOS_ULIMIT_VMEM=unlimited
+
+ENTRYPOINT []
+CMD ["cargo", "watch", "-x", "run --package rasa-mcp"]
