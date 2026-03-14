@@ -21,7 +21,7 @@ impl SessionState {
     pub fn create_document(&self, name: &str, width: u32, height: u32) -> Uuid {
         let doc = Document::new(name, width, height);
         let id = doc.id;
-        self.documents.lock().unwrap().insert(id, doc);
+        self.documents.lock().unwrap_or_else(|e| e.into_inner()).insert(id, doc);
         id
     }
 
@@ -29,7 +29,7 @@ impl SessionState {
     pub fn open_image(&self, path: &PathBuf) -> Result<Uuid, rasa_core::error::RasaError> {
         let doc = rasa_storage::import::import_image(path)?;
         let id = doc.id;
-        self.documents.lock().unwrap().insert(id, doc);
+        self.documents.lock().unwrap_or_else(|e| e.into_inner()).insert(id, doc);
         Ok(id)
     }
 
@@ -39,7 +39,7 @@ impl SessionState {
         id: Uuid,
         f: impl FnOnce(&Document) -> R,
     ) -> Result<R, rasa_core::error::RasaError> {
-        let docs = self.documents.lock().unwrap();
+        let docs = self.documents.lock().unwrap_or_else(|e| e.into_inner());
         let doc = docs
             .get(&id)
             .ok_or(rasa_core::error::RasaError::Other(format!(
@@ -54,7 +54,7 @@ impl SessionState {
         id: Uuid,
         f: impl FnOnce(&mut Document) -> R,
     ) -> Result<R, rasa_core::error::RasaError> {
-        let mut docs = self.documents.lock().unwrap();
+        let mut docs = self.documents.lock().unwrap_or_else(|e| e.into_inner());
         let doc = docs
             .get_mut(&id)
             .ok_or(rasa_core::error::RasaError::Other(format!(
@@ -65,7 +65,7 @@ impl SessionState {
 
     /// List all open document IDs with names.
     pub fn list_documents(&self) -> Vec<(Uuid, String, u32, u32)> {
-        let docs = self.documents.lock().unwrap();
+        let docs = self.documents.lock().unwrap_or_else(|e| e.into_inner());
         docs.values()
             .map(|d| (d.id, d.name.clone(), d.size.width, d.size.height))
             .collect()
@@ -73,7 +73,7 @@ impl SessionState {
 
     /// Close a document.
     pub fn close_document(&self, id: Uuid) -> bool {
-        self.documents.lock().unwrap().remove(&id).is_some()
+        self.documents.lock().unwrap_or_else(|e| e.into_inner()).remove(&id).is_some()
     }
 }
 

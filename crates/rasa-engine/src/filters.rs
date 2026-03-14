@@ -190,30 +190,15 @@ pub fn sharpen(buf: &mut PixelBuffer, radius: u32, amount: f32) {
     }
 
     let mut blurred = PixelBuffer::new(buf.width, buf.height);
-    // Copy pixels
-    let (w, h) = buf.dimensions();
-    for y in 0..h {
-        for x in 0..w {
-            blurred.set(x, y, buf.get(x, y).unwrap());
-        }
-    }
+    blurred.pixels_mut().copy_from_slice(buf.pixels());
     gaussian_blur(&mut blurred, radius);
 
-    for y in 0..h {
-        for x in 0..w {
-            let orig = buf.get(x, y).unwrap();
-            let blur = blurred.get(x, y).unwrap();
-            buf.set(
-                x,
-                y,
-                Color::new(
-                    (orig.r + amount * (orig.r - blur.r)).clamp(0.0, 1.0),
-                    (orig.g + amount * (orig.g - blur.g)).clamp(0.0, 1.0),
-                    (orig.b + amount * (orig.b - blur.b)).clamp(0.0, 1.0),
-                    orig.a,
-                ),
-            );
-        }
+    let blur_pixels = blurred.pixels();
+    for (i, px) in buf.pixels_mut().iter_mut().enumerate() {
+        let blur = blur_pixels[i];
+        px.r = (px.r + amount * (px.r - blur.r)).clamp(0.0, 1.0);
+        px.g = (px.g + amount * (px.g - blur.g)).clamp(0.0, 1.0);
+        px.b = (px.b + amount * (px.b - blur.b)).clamp(0.0, 1.0);
     }
 }
 

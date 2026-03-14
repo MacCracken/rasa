@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// RGBA color in linear space (0.0-1.0 per channel).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(C)]
 pub struct Color {
     pub r: f32,
     pub g: f32,

@@ -98,6 +98,9 @@ impl Document {
     }
 
     pub fn remove_layer(&mut self, id: Uuid) -> Result<Layer, RasaError> {
+        if self.layers.len() <= 1 {
+            return Err(RasaError::CannotRemoveLastLayer);
+        }
         let index = self.layer_index(id).ok_or(RasaError::LayerNotFound(id))?;
         let layer = self.layers.remove(index);
         self.pixel_data.retain(|(lid, _)| *lid != id);
@@ -429,7 +432,8 @@ impl Document {
         let cmd = self
             .history_mut()
             .undo()
-            .ok_or(RasaError::NothingToUndo)?;
+            .ok_or(RasaError::NothingToUndo)?
+            .clone();
         self.apply_inverse(&cmd);
         Ok(())
     }
@@ -438,7 +442,8 @@ impl Document {
         let cmd = self
             .history_mut()
             .redo()
-            .ok_or(RasaError::NothingToRedo)?;
+            .ok_or(RasaError::NothingToRedo)?
+            .clone();
         self.apply_forward(&cmd);
         Ok(())
     }
@@ -1077,5 +1082,41 @@ mod tests {
         } else {
             panic!("expected Group after undo");
         }
+    }
+
+    // ── Validation tests ────────────────────────────────
+
+    #[test]
+    fn new_document_clamps_zero_dimensions() {
+        let doc = Document::new("Tiny", 0, 0);
+        assert_eq!(doc.size.width, 1);
+        assert_eq!(doc.size.height, 1);
+    }
+
+    #[test]
+    fn new_document_clamps_huge_dimensions() {
+        let doc = Document::new("Huge", 100000, 100000);
+        assert_eq!(doc.size.width, Document::MAX_DIMENSION);
+        assert_eq!(doc.size.height, Document::MAX_DIMENSION);
+    }
+
+    #[test]
+    fn cannot_remove_last_layer() {
+        let mut doc = Document::new("Test", 10, 10);
+        let bg_id = doc.layers[0].id;
+        let result = doc.remove_layer(bg_id);
+        assert!(result.is_err());
+        assert_eq!(doc.layers.len(), 1); // still there
+    }
+
+    #[test]
+    fn remove_layer_works_with_multiple() {
+        let mut doc = Document::new("Test", 10, 10);
+        let l = Layer::new_raster("Extra", 10, 10);
+        let lid = l.id;
+        doc.add_layer(l);
+        assert_eq!(doc.layers.len(), 2);
+        doc.remove_layer(lid).unwrap();
+        assert_eq!(doc.layers.len(), 1);
     }
 }

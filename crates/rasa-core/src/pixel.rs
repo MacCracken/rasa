@@ -106,4 +106,18 @@ mod tests {
         let mut buf = PixelBuffer::new(4, 4);
         buf.set(10, 10, Color::WHITE); // should not panic
     }
+
+    #[test]
+    fn zero_size_buffer() {
+        let buf = PixelBuffer::new(0, 0);
+        assert_eq!(buf.dimensions(), (0, 0));
+        assert_eq!(buf.pixels().len(), 0);
+        assert!(buf.get(0, 0).is_none());
+    }
+
+    #[test]
+    fn zero_width_buffer() {
+        let buf = PixelBuffer::new(0, 10);
+        assert_eq!(buf.pixels().len(), 0);
+    }
 }

@@ -100,16 +100,16 @@ impl History {
         }
     }
 
-    pub fn undo(&mut self) -> Option<Command> {
+    pub fn undo(&mut self) -> Option<&Command> {
         let cmd = self.undo_stack.pop_back()?;
-        self.redo_stack.push(cmd.clone());
-        Some(cmd)
+        self.redo_stack.push(cmd);
+        self.redo_stack.last()
     }
 
-    pub fn redo(&mut self) -> Option<Command> {
+    pub fn redo(&mut self) -> Option<&Command> {
         let cmd = self.redo_stack.pop()?;
-        self.undo_stack.push_back(cmd.clone());
-        Some(cmd)
+        self.undo_stack.push_back(cmd);
+        self.undo_stack.back()
     }
 
     pub fn can_undo(&self) -> bool {

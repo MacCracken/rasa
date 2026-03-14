@@ -9,43 +9,43 @@ use rasa_core::pixel::PixelBuffer;
 
 use crate::format::ImageFormat;
 
+/// Convert raw RGBA u8 bytes into a PixelBuffer using slice access.
+fn rgba_bytes_to_buffer(raw: &[u8], width: u32, height: u32) -> PixelBuffer {
+    let mut buf = PixelBuffer::new(width, height);
+    let pixels = buf.pixels_mut();
+    for (i, px) in pixels.iter_mut().enumerate() {
+        let offset = i * 4;
+        *px = Color::new(
+            srgb_to_linear(raw[offset] as f32 / 255.0),
+            srgb_to_linear(raw[offset + 1] as f32 / 255.0),
+            srgb_to_linear(raw[offset + 2] as f32 / 255.0),
+            raw[offset + 3] as f32 / 255.0,
+        );
+    }
+    buf
+}
+
 /// Import an image file as a new Document with a single raster layer.
 pub fn import_image(path: &Path) -> Result<Document, RasaError> {
     let _format = ImageFormat::from_path(path)
         .ok_or_else(|| RasaError::UnsupportedFormat(path.display().to_string()))?;
 
-    let img =
-        image::open(path).map_err(|e| RasaError::Other(format!("failed to open image: {e}")))?;
-
-    let (width, height) = img.dimensions();
-    let rgba = img.to_rgba8();
-
-    let mut pixel_buf = PixelBuffer::new(width, height);
-    for (x, y, pixel) in rgba.enumerate_pixels() {
-        let [r, g, b, a] = pixel.0;
-        let color = Color::new(
-            srgb_to_linear(r as f32 / 255.0),
-            srgb_to_linear(g as f32 / 255.0),
-            srgb_to_linear(b as f32 / 255.0),
-            a as f32 / 255.0,
-        );
-        pixel_buf.set(x, y, color);
-    }
+    let buf = import_as_buffer(path)?;
 
     let name = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("Untitled");
 
+    let (width, height) = buf.dimensions();
     let layer = Layer::new_raster(name, width, height);
     let layer_id = layer.id;
 
     let mut doc = Document::new(name, width, height);
-    // Replace the default background layer with our imported data
     doc.layers.clear();
     doc.pixel_data.clear();
     doc.layers.push(layer);
-    doc.pixel_data.push((layer_id, pixel_buf));
+    doc.pixel_data.push((layer_id, buf));
     doc.active_layer = Some(layer_id);
 
     Ok(doc)
@@ -58,20 +58,7 @@ pub fn import_as_buffer(path: &Path) -> Result<PixelBuffer, RasaError> {
 
     let (width, height) = img.dimensions();
     let rgba = img.to_rgba8();
-
-    let mut pixel_buf = PixelBuffer::new(width, height);
-    for (x, y, pixel) in rgba.enumerate_pixels() {
-        let [r, g, b, a] = pixel.0;
-        let color = Color::new(
-            srgb_to_linear(r as f32 / 255.0),
-            srgb_to_linear(g as f32 / 255.0),
-            srgb_to_linear(b as f32 / 255.0),
-            a as f32 / 255.0,
-        );
-        pixel_buf.set(x, y, color);
-    }
-
-    Ok(pixel_buf)
+    Ok(rgba_bytes_to_buffer(rgba.as_raw(), width, height))
 }
 
 /// Import raw RGBA u8 bytes as a PixelBuffer.
@@ -82,27 +69,9 @@ pub fn import_from_rgba_bytes(
 ) -> Result<PixelBuffer, RasaError> {
     let expected = (width as usize) * (height as usize) * 4;
     if data.len() != expected {
-        return Err(RasaError::Other(format!(
-            "expected {expected} bytes for {width}x{height} RGBA, got {}",
-            data.len()
-        )));
+        return Err(RasaError::InvalidDimensions { width, height });
     }
-
-    let mut buf = PixelBuffer::new(width, height);
-    for y in 0..height {
-        for x in 0..width {
-            let i = ((y as usize) * (width as usize) + (x as usize)) * 4;
-            let color = Color::new(
-                srgb_to_linear(data[i] as f32 / 255.0),
-                srgb_to_linear(data[i + 1] as f32 / 255.0),
-                srgb_to_linear(data[i + 2] as f32 / 255.0),
-                data[i + 3] as f32 / 255.0,
-            );
-            buf.set(x, y, color);
-        }
-    }
-
-    Ok(buf)
+    Ok(rgba_bytes_to_buffer(data, width, height))
 }
 
 #[cfg(test)]
@@ -116,7 +85,6 @@ mod tests {
         ];
         let buf = import_from_rgba_bytes(&data, 2, 2).unwrap();
         assert_eq!(buf.dimensions(), (2, 2));
-        // First pixel should be red
         let px = buf.get(0, 0).unwrap();
         assert!(px.r > 0.9);
         assert!(px.g < 0.01);
@@ -138,6 +106,12 @@ mod tests {
     #[test]
     fn import_unsupported_format() {
         let result = import_image(Path::new("file.xyz"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn import_as_buffer_nonexistent() {
+        let result = import_as_buffer(Path::new("/nonexistent/file.png"));
         assert!(result.is_err());
     }
 }

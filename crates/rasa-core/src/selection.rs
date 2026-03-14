@@ -311,6 +311,18 @@ mod tests {
     }
 
     #[test]
+    fn mask_rejects_negative_coords() {
+        let sel = Selection::Mask {
+            width: 4,
+            height: 4,
+            data: vec![1.0; 16],
+        };
+        assert!(!sel.contains(Point { x: -1.0, y: 0.0 }));
+        assert!(!sel.contains(Point { x: 0.0, y: -1.0 }));
+        assert!(!sel.contains(Point { x: -5.0, y: -5.0 }));
+    }
+
+    #[test]
     fn bounds_rect() {
         let sel = Selection::Rect(Rect {
             x: 5.0,

@@ -610,4 +610,98 @@ mod tests {
         assert_eq!(parse_blend_mode("soft_light").unwrap(), BlendMode::SoftLight);
         assert!(parse_blend_mode("bogus").is_err());
     }
+
+    #[test]
+    fn open_clamps_huge_dimensions() {
+        let state = SessionState::new();
+        let result = call_tool(&state, "rasa_open_image", &json!({
+            "width": 99999,
+            "height": 99999,
+        }))
+        .unwrap();
+        assert!(result["width"].as_u64().unwrap() <= MAX_MCP_DIMENSION as u64);
+        assert!(result["height"].as_u64().unwrap() <= MAX_MCP_DIMENSION as u64);
+    }
+
+    #[test]
+    fn open_nonexistent_file_errors() {
+        let state = SessionState::new();
+        let result = call_tool(&state, "rasa_open_image", &json!({
+            "path": "/nonexistent/fake_image.png",
+        }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn export_bad_directory_errors() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 4, 4);
+        let result = call_tool(&state, "rasa_export", &json!({
+            "document_id": id.to_string(),
+            "path": "/nonexistent_dir/output.png",
+        }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn edit_layer_duplicate() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "duplicate",
+            "layer_id": layer_id.to_string(),
+        }))
+        .unwrap();
+        assert_eq!(result["action"], "duplicated");
+        let count = state.with_doc(id, |d| d.layers.len()).unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn edit_layer_rename() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "rename",
+            "layer_id": layer_id.to_string(),
+            "name": "Renamed",
+        }))
+        .unwrap();
+        assert_eq!(result["action"], "renamed");
+    }
+
+    #[test]
+    fn apply_filter_blur() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 8, 8);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_apply_filter", &json!({
+            "document_id": id.to_string(),
+            "layer_id": layer_id.to_string(),
+            "filter": "blur",
+            "radius": 2,
+        }))
+        .unwrap();
+        assert_eq!(result["applied"], true);
+    }
+
+    #[test]
+    fn apply_filter_brightness() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 4, 4);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_apply_filter", &json!({
+            "document_id": id.to_string(),
+            "layer_id": layer_id.to_string(),
+            "filter": "brightness_contrast",
+            "brightness": 0.2,
+            "contrast": 0.1,
+        }))
+        .unwrap();
+        assert_eq!(result["applied"], true);
+    }
 }

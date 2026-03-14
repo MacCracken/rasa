@@ -51,38 +51,21 @@ pub fn export_to_png_bytes(buf: &PixelBuffer) -> Result<Vec<u8>, RasaError> {
 
 /// Export a pixel buffer to RGBA u8 bytes (raw, no encoding).
 pub fn export_to_rgba_bytes(buf: &PixelBuffer) -> Vec<u8> {
-    let (w, h) = buf.dimensions();
-    let mut bytes = Vec::with_capacity((w * h * 4) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let px = buf.get(x, y).unwrap();
-            let r = (linear_to_srgb(px.r) * 255.0 + 0.5) as u8;
-            let g = (linear_to_srgb(px.g) * 255.0 + 0.5) as u8;
-            let b = (linear_to_srgb(px.b) * 255.0 + 0.5) as u8;
-            let a = (px.a * 255.0 + 0.5) as u8;
-            bytes.push(r);
-            bytes.push(g);
-            bytes.push(b);
-            bytes.push(a);
-        }
+    let pixels = buf.pixels();
+    let mut bytes = Vec::with_capacity(pixels.len() * 4);
+    for px in pixels {
+        bytes.push((linear_to_srgb(px.r) * 255.0 + 0.5) as u8);
+        bytes.push((linear_to_srgb(px.g) * 255.0 + 0.5) as u8);
+        bytes.push((linear_to_srgb(px.b) * 255.0 + 0.5) as u8);
+        bytes.push((px.a * 255.0 + 0.5) as u8);
     }
     bytes
 }
 
 fn buffer_to_image(buf: &PixelBuffer) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let (w, h) = buf.dimensions();
-    let mut img = ImageBuffer::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            let px = buf.get(x, y).unwrap();
-            let r = (linear_to_srgb(px.r) * 255.0 + 0.5) as u8;
-            let g = (linear_to_srgb(px.g) * 255.0 + 0.5) as u8;
-            let b = (linear_to_srgb(px.b) * 255.0 + 0.5) as u8;
-            let a = (px.a * 255.0 + 0.5) as u8;
-            img.put_pixel(x, y, Rgba([r, g, b, a]));
-        }
-    }
-    img
+    let raw = export_to_rgba_bytes(buf);
+    ImageBuffer::from_raw(w, h, raw).expect("buffer dimensions match")
 }
 
 fn to_image_format(format: ImageFormat) -> image::ImageFormat {
