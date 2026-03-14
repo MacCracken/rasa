@@ -39,8 +39,8 @@ test: ## Run all tests
 test-unit: ## Run unit tests only
 	cargo test --workspace --lib
 
-test-coverage: ## Run tests with coverage (65% threshold)
-	cargo tarpaulin --workspace --fail-under 65 --out html
+test-coverage: ## Run tests with coverage (80% threshold on testable crates)
+	cargo tarpaulin -p rasa-core -p rasa-engine -p rasa-storage -p rasa-mcp --fail-under 80 --out html
 
 # ── Quality ─────────────────────────────────────────────
 

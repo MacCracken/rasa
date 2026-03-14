@@ -168,4 +168,48 @@ mod tests {
         assert_eq!(JpegQuality::new(150).0, 100);
         assert_eq!(JpegQuality::new(85).0, 85);
     }
+
+    #[test]
+    fn jpeg_quality_default() {
+        assert_eq!(JpegQuality::default().0, 90);
+    }
+
+    #[test]
+    fn extension_returns_correct() {
+        assert_eq!(ImageFormat::Png.extension(), "png");
+        assert_eq!(ImageFormat::Jpeg.extension(), "jpg");
+        assert_eq!(ImageFormat::WebP.extension(), "webp");
+        assert_eq!(ImageFormat::Tiff.extension(), "tiff");
+        assert_eq!(ImageFormat::Bmp.extension(), "bmp");
+        assert_eq!(ImageFormat::Gif.extension(), "gif");
+    }
+
+    #[test]
+    fn export_settings_for_format() {
+        let s = ExportSettings::for_format(ImageFormat::Png);
+        assert_eq!(s.format(), ImageFormat::Png);
+        let s = ExportSettings::for_format(ImageFormat::Jpeg);
+        assert_eq!(s.format(), ImageFormat::Jpeg);
+        let s = ExportSettings::for_format(ImageFormat::WebP);
+        assert_eq!(s.format(), ImageFormat::WebP);
+        let s = ExportSettings::for_format(ImageFormat::Tiff);
+        assert_eq!(s.format(), ImageFormat::Tiff);
+        let s = ExportSettings::for_format(ImageFormat::Bmp);
+        assert_eq!(s.format(), ImageFormat::Bmp);
+        let s = ExportSettings::for_format(ImageFormat::Gif);
+        assert_eq!(s.format(), ImageFormat::Gif);
+    }
+
+    #[test]
+    fn detect_bmp_gif() {
+        assert_eq!(ImageFormat::from_path(Path::new("img.bmp")), Some(ImageFormat::Bmp));
+        assert_eq!(ImageFormat::from_path(Path::new("anim.gif")), Some(ImageFormat::Gif));
+    }
+
+    #[test]
+    fn tiff_bmp_gif_alpha() {
+        assert!(ImageFormat::Tiff.supports_alpha());
+        assert!(!ImageFormat::Bmp.supports_alpha());
+        assert!(ImageFormat::Gif.supports_alpha());
+    }
 }

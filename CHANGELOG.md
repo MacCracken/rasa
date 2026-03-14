@@ -5,57 +5,81 @@ All notable changes to Rasa will be documented in this file.
 ## [2026.3.13] — 2026-03-13
 
 ### Added
-- Initial project scaffolding and workspace setup
-- Core crate structure: rasa-core, rasa-gpu, rasa-engine, rasa-storage, rasa-ai, rasa-ui, rasa-mcp
-- Project documentation: README, CONTRIBUTING, roadmap
-- CI/CD pipeline configuration
-- Makefile with standard build targets
-- **rasa-core**: Document, Layer, Color, Geometry, Transform, Selection, PixelBuffer types
-- **rasa-core**: Blend mode implementations (12 modes with Porter-Duff alpha compositing)
-- **rasa-core**: Undo/redo command history system
-- **rasa-core**: Error type hierarchy with domain-specific variants (layer, selection, transform, storage, AI, history errors)
-- **rasa-core**: 109 unit tests across all modules (geometry, layer, color, transform, selection, pixel, blend, command, document, error)
-- **rasa-core**: 32 serde round-trip integration tests for all serializable types
-- **rasa-core**: sRGB/linear/HSL color space conversions
-- **rasa-core**: 2D affine transform with composition and inverse
-- **rasa-core**: Merge down operation — composites upper layer pixels onto lower layer
-- **rasa-core**: Layer grouping and ungrouping with undo/redo support
-- **rasa-engine**: Recursive group compositing — groups rendered to intermediate buffer then blended
-- **rasa-engine**: CPU compositing pipeline (flatten all visible layers with blend modes and opacity)
-- **rasa-engine**: Document renderer with sRGB/linear/Display P3 color space conversion
-- **rasa-engine**: Filter pipeline: brightness/contrast, hue/saturation, curves, levels, gaussian blur, sharpen, invert, grayscale
-- **rasa-engine**: Adjustment layer compositing — adjustment layers apply filters inline during compositing
-- **rasa-engine**: Tile-based rendering (256x256 tiles) with dirty-region render cache
-- **rasa-engine**: Region rendering for partial/incremental updates
-- **rasa-engine**: RGBA u8 byte output for display/export
-- **rasa-storage**: PNG, JPEG, WebP, TIFF, BMP, GIF import/export with sRGB/linear color conversion
-- **rasa-storage**: JPEG quality settings wired to encoder (1-100 via `JpegEncoder::new_with_quality`)
-- **rasa-storage**: Native `.rasa` project format (RASA magic, JSON header, binary pixel data)
-- **rasa-storage**: Recent files catalog backed by SQLite (rusqlite) with upsert, ordering, limits
-- **rasa-storage**: Format detection by file extension, alpha support queries, export settings
-- **rasa-core**: Selection combine operations (add, subtract, intersect via mask arithmetic)
-- **rasa-engine**: Brush engine with round/square tips, hardness falloff, pressure sensitivity, spacing
-- **rasa-engine**: Eraser tool (alpha reduction with brush dynamics)
-- **rasa-engine**: Flood fill with tolerance, selection fill, linear gradient
-- **rasa-engine**: Crop and affine transform with bilinear interpolation
-- **rasa-engine**: Eyedropper / color picker (linear + sRGB)
-- **rasa-gpu**: GPU compute pipeline — shader compilation, bind groups, dispatch, readback
-- **rasa-gpu**: 9 WGSL compute shaders: composite (Normal/Multiply/Screen), invert, grayscale, brightness/contrast, blur H/V, brush dab
-- **rasa-gpu**: GpuBackend wired to actual compute dispatch for compositing and per-pixel filters
-- **rasa-gpu**: Performance benchmark framework with CPU baseline and GPU comparison
-- **rasa-ai**: AI inference pipeline via hoosh/Synapse HTTP API (inpaint, upscale, segment, generate, remove-bg)
-- **rasa-ai**: Model management with presets (SD Inpaint, RealESRGAN, SAM ViT-H, SDXL, U2Net)
-- **rasa-ai**: Document integration: apply AI results as layers, within selections, with feathered blending
-- **rasa-mcp**: MCP 2.0 server with stdio transport and JSON-RPC 2.0 protocol
-- **rasa-mcp**: 5 MCP tools: rasa_open_image, rasa_edit_layer, rasa_apply_filter, rasa_get_document, rasa_export
-- **rasa-mcp**: 5 agnoshi voice intents: rasa.open, rasa.filter, rasa.layer, rasa.export, rasa.ai
-- **rasa-mcp**: `.agnos-agent.json` bundle for AGNOS platform integration
-- **rasa-mcp**: Session state management for multi-document workflows
-- **rasa-ui**: Desktop GUI application using egui/eframe
-- **rasa-ui**: Main window with menu bar (File/Edit/View/Layer/Filter), status bar with zoom/dimensions
-- **rasa-ui**: Canvas viewport with pan (middle-click drag), zoom (scroll wheel), pixel grid, checkerboard transparency
-- **rasa-ui**: Tool palette with 9 tools: Brush, Eraser, Move, Selection, Eyedropper, Fill, Gradient, Crop, Transform
-- **rasa-ui**: Layer panel with visibility toggle, opacity slider, blend mode selector, click-to-select
-- **rasa-ui**: Properties panel with tool-specific settings (brush size/opacity/hardness) and color picker
-- **rasa-ui**: History panel with undo/redo buttons
-- **rasa-ui**: Keyboard shortcuts: B/E/M/S/I/F/G/C/T for tools, Ctrl+Z undo, Ctrl+Shift+Z redo, +/- zoom
+
+**rasa-core** — Document model and core types
+- Document, Layer, Color (`#[repr(C)]`), Geometry, Transform, Selection, PixelBuffer types
+- 12 blend modes with Porter-Duff alpha compositing
+- Undo/redo command history (VecDeque-based, O(1) eviction)
+- Error type hierarchy: 13 domain-specific variants (layer, selection, transform, storage, AI, history)
+- Selection combine operations (add, subtract, intersect via mask arithmetic)
+- Merge down, layer grouping/ungrouping with full undo/redo
+- Dimension validation (1..65536 clamping), PixelBuffer allocation cap (256 MP)
+- Last-layer removal guard (`CannotRemoveLastLayer`)
+- 154 unit tests + 32 serde round-trip integration tests
+
+**rasa-engine** — Rendering and editing tools
+- CPU compositing pipeline with recursive group rendering and adjustment layers
+- Document renderer with sRGB/linear/Display P3 color space conversion
+- 8 filters: brightness/contrast, hue/saturation, curves, levels, gaussian blur, sharpen, invert, grayscale
+- Tile-based rendering (256x256) with dirty-region cache
+- Brush engine: round/square tips, hardness, pressure sensitivity, spacing
+- Eraser, flood fill, selection fill, linear gradient, crop, affine transform (bilinear interpolation)
+- Eyedropper / color picker
+- Optimized hot paths: slice-based pixel access (no per-pixel bounds checks)
+- 71 tests
+
+**rasa-gpu** — GPU acceleration
+- wgpu device initialization (Vulkan/Metal) with graceful CPU fallback
+- 9 WGSL compute shaders: composite (Normal/Multiply/Screen), invert, grayscale, brightness/contrast, blur H/V, brush dab
+- Compute pipeline: shader compilation, bind groups, dispatch, GPU readback
+- `RenderBackend` trait abstracting CPU/GPU with `select_backend()`
+- Performance benchmark framework (CPU baseline + GPU comparison, MP/s metrics)
+- 20 tests
+
+**rasa-storage** — File I/O
+- PNG, JPEG, WebP, TIFF, BMP, GIF import/export with sRGB/linear conversion
+- JPEG quality wired to encoder (1-100)
+- Native `.rasa` project format: RASA magic, JSON header (size-validated), binary pixel data
+- Buffered I/O (BufReader/BufWriter) for large documents
+- Recent files catalog (SQLite via rusqlite)
+- Format detection, alpha support queries, export settings
+- 41 tests
+
+**rasa-ai** — AI inference
+- hoosh/Synapse HTTP API client (inpaint, upscale, segment, generate, remove-bg)
+- Model management: ModelId, ModelInfo, ModelKind, preset models
+- Pre/post-processing pipeline (PixelBuffer to/from PNG)
+- Document integration: apply AI results as layers, within selections, with feathered blending
+- Progress tracking and cancellation
+- 36 tests
+
+**rasa-mcp** — MCP server and AGNOS integration
+- MCP 2.0 server: stdio transport, JSON-RPC 2.0 (initialize, tools/list, tools/call)
+- 5 tools: rasa_open_image, rasa_edit_layer, rasa_apply_filter, rasa_get_document, rasa_export
+- 5 agnoshi voice intents: rasa.open, rasa.filter, rasa.layer, rasa.export, rasa.ai
+- `.agnos-agent.json` bundle
+- Session state with Mutex poison recovery
+- Input validation: dimension caps, file existence checks, parent directory validation
+- JSON-RPC spec compliance: `skip_serializing_if` for response fields, notification handling
+- 47 tests
+
+**rasa-ui** — Desktop GUI
+- egui/eframe application (Wayland-compatible via winit)
+- Menu bar (File/Edit/View/Layer/Filter), status bar
+- Canvas viewport: pan, zoom, pixel grid, checkerboard transparency
+- 9-tool palette: Brush, Eraser, Move, Selection, Eyedropper, Fill, Gradient, Crop, Transform
+- Layer panel: visibility, opacity slider, blend mode, click-to-select
+- Properties panel: tool-specific settings, color picker with hex display
+- History panel with undo/redo
+- Keyboard shortcuts: B/E/M/S/I/F/G/C/T, Ctrl+Z/Shift+Z, +/-
+- 9 tests
+
+**Infrastructure**
+- 7-crate workspace with Cargo.toml workspace dependencies
+- CI pipeline: build, test, lint (clippy), audit
+- Makefile with 20 targets
+- Date-based versioning (YYYY.M.DD)
+
+### Test Summary
+
+**410 tests passing** across 7 crates. 89% coverage on testable crates (core, engine, storage, mcp).

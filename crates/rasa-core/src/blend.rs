@@ -212,4 +212,72 @@ mod tests {
         let b = blend(BLUE, RED, BlendMode::Exclusion, 1.0);
         assert!(colors_approx_eq(a, b));
     }
+
+    #[test]
+    fn darken_takes_minimum() {
+        let result = blend(GRAY, Color::new(0.3, 0.3, 0.3, 1.0), BlendMode::Darken, 1.0);
+        assert!(approx_eq(result.r, 0.3));
+    }
+
+    #[test]
+    fn lighten_takes_maximum() {
+        let result = blend(GRAY, Color::new(0.8, 0.8, 0.8, 1.0), BlendMode::Lighten, 1.0);
+        assert!(approx_eq(result.r, 0.8));
+    }
+
+    #[test]
+    fn color_dodge_white_top() {
+        let result = blend(GRAY, Color::WHITE, BlendMode::ColorDodge, 1.0);
+        assert!(approx_eq(result.r, 1.0));
+    }
+
+    #[test]
+    fn color_dodge_normal() {
+        let result = blend(GRAY, GRAY, BlendMode::ColorDodge, 1.0);
+        assert!(result.r > 0.5); // dodge brightens
+    }
+
+    #[test]
+    fn color_burn_black_top() {
+        let result = blend(GRAY, Color::BLACK, BlendMode::ColorBurn, 1.0);
+        assert!(approx_eq(result.r, 0.0));
+    }
+
+    #[test]
+    fn color_burn_normal() {
+        let result = blend(GRAY, GRAY, BlendMode::ColorBurn, 1.0);
+        assert!(result.r < 0.5); // burn darkens
+    }
+
+    #[test]
+    fn soft_light_low() {
+        let result = blend(GRAY, Color::new(0.3, 0.3, 0.3, 1.0), BlendMode::SoftLight, 1.0);
+        assert!(result.r < 0.5); // soft light with dark top darkens
+    }
+
+    #[test]
+    fn soft_light_high() {
+        let result = blend(GRAY, Color::new(0.8, 0.8, 0.8, 1.0), BlendMode::SoftLight, 1.0);
+        assert!(result.r > 0.5); // soft light with bright top lightens
+    }
+
+    #[test]
+    fn soft_light_dark_base() {
+        // Tests the base <= 0.25 branch
+        let dark = Color::new(0.1, 0.1, 0.1, 1.0);
+        let result = blend(dark, Color::new(0.8, 0.8, 0.8, 1.0), BlendMode::SoftLight, 1.0);
+        assert!(result.r > 0.1);
+    }
+
+    #[test]
+    fn hard_light_dark_top() {
+        let result = blend(GRAY, Color::new(0.3, 0.3, 0.3, 1.0), BlendMode::HardLight, 1.0);
+        assert!(result.r < 0.5);
+    }
+
+    #[test]
+    fn hard_light_bright_top() {
+        let result = blend(GRAY, Color::new(0.8, 0.8, 0.8, 1.0), BlendMode::HardLight, 1.0);
+        assert!(result.r > 0.5);
+    }
 }

@@ -328,4 +328,75 @@ mod tests {
         let same_full = buf1.get(7, 10).unwrap();
         assert!(same_full.a >= edge.a);
     }
+
+    #[test]
+    fn erase_stroke_reduces_alpha() {
+        let mut buf = PixelBuffer::filled(30, 10, Color::new(1.0, 0.0, 0.0, 1.0));
+        let settings = BrushSettings {
+            size: 4.0,
+            ..Default::default()
+        };
+        let points = vec![
+            StrokePoint { position: Point { x: 5.0, y: 5.0 }, pressure: 1.0 },
+            StrokePoint { position: Point { x: 25.0, y: 5.0 }, pressure: 1.0 },
+        ];
+        erase_stroke(&mut buf, &points, &settings);
+        let mid = buf.get(15, 5).unwrap();
+        assert!(mid.a < 1.0);
+    }
+
+    #[test]
+    fn erase_stroke_single_point() {
+        let mut buf = PixelBuffer::filled(20, 20, Color::WHITE);
+        let settings = BrushSettings {
+            size: 6.0,
+            ..Default::default()
+        };
+        erase_stroke(&mut buf, &[StrokePoint {
+            position: Point { x: 10.0, y: 10.0 },
+            pressure: 1.0,
+        }], &settings);
+        let px = buf.get(10, 10).unwrap();
+        assert!(px.a < 1.0);
+    }
+
+    #[test]
+    fn erase_stroke_empty() {
+        let mut buf = PixelBuffer::filled(10, 10, Color::WHITE);
+        erase_stroke(&mut buf, &[], &BrushSettings::default());
+        // Should be no-op
+        assert_eq!(buf.get(5, 5).unwrap().a, 1.0);
+    }
+
+    #[test]
+    fn paint_stroke_single_point() {
+        let mut buf = PixelBuffer::new(20, 20);
+        let settings = BrushSettings {
+            size: 6.0,
+            color: Color::new(1.0, 0.0, 0.0, 1.0),
+            ..Default::default()
+        };
+        paint_stroke(&mut buf, &[StrokePoint {
+            position: Point { x: 10.0, y: 10.0 },
+            pressure: 1.0,
+        }], &settings);
+        let px = buf.get(10, 10).unwrap();
+        assert!(px.a > 0.5);
+    }
+
+    #[test]
+    fn hardness_one_no_nan() {
+        let mut buf = PixelBuffer::new(20, 20);
+        let settings = BrushSettings {
+            size: 10.0,
+            hardness: 1.0,
+            color: Color::new(1.0, 0.0, 0.0, 1.0),
+            ..Default::default()
+        };
+        paint_dab(&mut buf, Point { x: 10.0, y: 10.0 }, &settings, 1.0);
+        let px = buf.get(10, 10).unwrap();
+        assert!(!px.r.is_nan());
+        assert!(!px.a.is_nan());
+        assert!(px.r > 0.5);
+    }
 }

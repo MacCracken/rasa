@@ -704,4 +704,162 @@ mod tests {
         .unwrap();
         assert_eq!(result["applied"], true);
     }
+
+    #[test]
+    fn edit_layer_set_visibility() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "set_visibility",
+            "layer_id": layer_id.to_string(),
+            "visible": false,
+        }))
+        .unwrap();
+        assert_eq!(result["action"], "visibility_set");
+    }
+
+    #[test]
+    fn edit_layer_set_blend_mode() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "set_blend_mode",
+            "layer_id": layer_id.to_string(),
+            "blend_mode": "multiply",
+        }))
+        .unwrap();
+        assert_eq!(result["action"], "blend_mode_set");
+    }
+
+    #[test]
+    fn edit_layer_reorder() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "add",
+            "name": "Top",
+        })).unwrap();
+        let layer_id = state.with_doc(id, |d| d.layers[1].id).unwrap();
+        let result = call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "reorder",
+            "layer_id": layer_id.to_string(),
+            "index": 0,
+        }))
+        .unwrap();
+        assert_eq!(result["action"], "reordered");
+    }
+
+    #[test]
+    fn edit_layer_remove() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "add",
+            "name": "Extra",
+        })).unwrap();
+        let extra_id = state.with_doc(id, |d| d.layers[1].id).unwrap();
+        let result = call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "remove",
+            "layer_id": extra_id.to_string(),
+        }))
+        .unwrap();
+        assert_eq!(result["action"], "removed");
+    }
+
+    #[test]
+    fn edit_layer_merge_down() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "add",
+            "name": "Upper",
+        })).unwrap();
+        let upper_id = state.with_doc(id, |d| d.layers[1].id).unwrap();
+        let result = call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "merge_down",
+            "layer_id": upper_id.to_string(),
+        }))
+        .unwrap();
+        assert_eq!(result["action"], "merged_down");
+    }
+
+    #[test]
+    fn apply_filter_grayscale() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 4, 4);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_apply_filter", &json!({
+            "document_id": id.to_string(),
+            "layer_id": layer_id.to_string(),
+            "filter": "grayscale",
+        }))
+        .unwrap();
+        assert_eq!(result["applied"], true);
+    }
+
+    #[test]
+    fn apply_filter_sharpen() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 8, 8);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_apply_filter", &json!({
+            "document_id": id.to_string(),
+            "layer_id": layer_id.to_string(),
+            "filter": "sharpen",
+            "radius": 1,
+            "amount": 0.5,
+        }))
+        .unwrap();
+        assert_eq!(result["applied"], true);
+    }
+
+    #[test]
+    fn apply_filter_hue_saturation() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 4, 4);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_apply_filter", &json!({
+            "document_id": id.to_string(),
+            "layer_id": layer_id.to_string(),
+            "filter": "hue_saturation",
+            "hue": 30.0,
+            "saturation": 0.1,
+        }))
+        .unwrap();
+        assert_eq!(result["applied"], true);
+    }
+
+    #[test]
+    fn apply_filter_unknown_errors() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 4, 4);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(&state, "rasa_apply_filter", &json!({
+            "document_id": id.to_string(),
+            "layer_id": layer_id.to_string(),
+            "filter": "bogus_filter",
+        }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn edit_layer_unknown_action_errors() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        let result = call_tool(&state, "rasa_edit_layer", &json!({
+            "document_id": id.to_string(),
+            "action": "explode",
+        }));
+        assert!(result.is_err());
+    }
 }

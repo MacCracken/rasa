@@ -463,4 +463,134 @@ mod tests {
             .is_none()
         );
     }
+
+    #[test]
+    fn ellipse_zero_radius_contains_nothing() {
+        let sel = Selection::Ellipse(Rect {
+            x: 5.0, y: 5.0, width: 0.0, height: 0.0,
+        });
+        assert!(!sel.contains(Point { x: 5.0, y: 5.0 }));
+    }
+
+    #[test]
+    fn bounds_freeform() {
+        let sel = Selection::Freeform {
+            points: vec![
+                Point { x: 1.0, y: 2.0 },
+                Point { x: 5.0, y: 2.0 },
+                Point { x: 3.0, y: 8.0 },
+            ],
+        };
+        let b = sel.bounds().unwrap();
+        assert_eq!(b.x, 1.0);
+        assert_eq!(b.y, 2.0);
+        assert_eq!(b.width, 4.0);
+        assert_eq!(b.height, 6.0);
+    }
+
+    #[test]
+    fn bounds_freeform_empty() {
+        let sel = Selection::Freeform { points: vec![] };
+        assert!(sel.bounds().is_none());
+    }
+
+    #[test]
+    fn bounds_mask() {
+        let sel = Selection::Mask {
+            width: 4,
+            height: 4,
+            data: vec![
+                0.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 1.0, 0.0,
+                0.0, 1.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 0.0,
+            ],
+        };
+        let b = sel.bounds().unwrap();
+        assert_eq!(b.x, 1.0);
+        assert_eq!(b.y, 1.0);
+        assert_eq!(b.width, 2.0);
+        assert_eq!(b.height, 2.0);
+    }
+
+    #[test]
+    fn bounds_empty_mask() {
+        let sel = Selection::Mask {
+            width: 2,
+            height: 2,
+            data: vec![0.0; 4],
+        };
+        assert!(sel.bounds().is_none());
+    }
+
+    #[test]
+    fn invert_none() {
+        let sel = Selection::None;
+        let inverted = sel.invert(4, 4);
+        // Inverting "everything" should give empty mask
+        if let Selection::Mask { data, .. } = &inverted {
+            assert!(data.iter().all(|&v| v == 0.0));
+        } else {
+            panic!("expected Mask");
+        }
+    }
+
+    #[test]
+    fn invert_rect_via_mask() {
+        let sel = Selection::Rect(Rect {
+            x: 1.0, y: 1.0, width: 2.0, height: 2.0,
+        });
+        let inverted = sel.invert(4, 4);
+        if let Selection::Mask { data, .. } = &inverted {
+            // (0,0) center at 0.5,0.5 is outside rect so should be selected after invert
+            assert!(data[0] > 0.5);
+            // (1,1) center at 1.5,1.5 is inside rect so should be unselected after invert
+            assert!(data[5] < 0.5);
+        } else {
+            panic!("expected Mask");
+        }
+    }
+
+    #[test]
+    fn to_mask_ellipse() {
+        let sel = Selection::Ellipse(Rect {
+            x: 0.0, y: 0.0, width: 4.0, height: 4.0,
+        });
+        let mask = sel.to_mask(4, 4);
+        if let Selection::Mask { data, .. } = &mask {
+            // Center pixel (1,1) at 1.5,1.5 should be inside ellipse
+            assert_eq!(data[5], 1.0);
+        } else {
+            panic!("expected Mask");
+        }
+    }
+
+    #[test]
+    fn to_mask_none_selects_everything() {
+        let mask = Selection::None.to_mask(3, 3);
+        if let Selection::Mask { data, .. } = &mask {
+            assert!(data.iter().all(|&v| v == 1.0));
+        } else {
+            panic!("expected Mask");
+        }
+    }
+
+    #[test]
+    fn to_mask_returns_self_for_mask() {
+        let sel = Selection::Mask {
+            width: 2, height: 2, data: vec![0.5, 0.5, 0.5, 0.5],
+        };
+        let mask = sel.to_mask(2, 2);
+        if let Selection::Mask { data, .. } = &mask {
+            assert_eq!(data[0], 0.5);
+        }
+    }
+
+    #[test]
+    fn freeform_less_than_3_points() {
+        let sel = Selection::Freeform {
+            points: vec![Point { x: 0.0, y: 0.0 }, Point { x: 1.0, y: 1.0 }],
+        };
+        assert!(!sel.contains(Point { x: 0.5, y: 0.5 }));
+    }
 }

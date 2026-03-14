@@ -2,142 +2,24 @@
 
 > **Version**: 2026.3.13
 > **Status**: MVP v1 complete — all 10 phases done
-> **Tests**: 347 passing
+> **Tests**: 410 passing (89% coverage on testable crates)
 
 ---
 
-## MVP Phases
+## MVP Phases (Complete)
 
-| Phase | Goal | Key Deliverables |
-|-------|------|-----------------|
-| 1 — Foundation | Workspace + core types | Document model, layers, color, geometry, transforms |
-| 2 — Canvas & Layers | Layer system | Blend modes, compositing, opacity, layer groups |
-| 3 — Rendering Pipeline | CPU renderer | Flatten layers, filter chain, color management |
-| 4 — Storage & Formats | File I/O | PNG/JPEG/WebP read-write, native `.rasa` project format |
-| 5 — Basic Tools | Editing tools | Brush, eraser, selection (rect/ellipse/freeform), crop, transform |
-| 6 — GPU Acceleration | Vulkan compute | GPU compositing, GPU filters (blur, sharpen, etc.) |
-| 7 — AI Foundation | Inference pipeline | Model loading (ONNX), hoosh/Synapse integration, pre/post-processing |
-| 8 — AI Features | Core AI tools | Inpainting, upscaling (2x/4x), background removal, generative fill |
-| 9 — MCP & Agnoshi | Platform integration | 5 MCP tools, 5 agnoshi intents, `.agnos-agent` bundle |
-| 10 — UI Shell | Desktop application | Window, canvas viewport, tool palette, layer panel, properties |
-
----
-
-## Phase 1 — Foundation ✓
-
-**Goal**: Establish workspace structure and zero-I/O core types.
-
-- [x] Workspace scaffold (7 crates)
-- [x] `rasa-core`: Document, Layer, Color, Geometry, Transform, Selection types
-- [x] CI pipeline (build, test, lint, audit)
-- [x] Project documentation (README, CONTRIBUTING, roadmap)
-- [x] Unit tests for core types (109 unit tests across all modules)
-- [x] Serde round-trip tests for all types (32 integration tests)
-- [x] Error type hierarchy (domain-specific variants for layers, selection, transform, storage, AI, history)
-
-## Phase 2 — Canvas & Layers ✓
-
-**Goal**: Working layer system with compositing.
-
-- [x] Blend mode implementations (12 modes: Normal, Multiply, Screen, Overlay, Darken, Lighten, ColorDodge, ColorBurn, SoftLight, HardLight, Difference, Exclusion)
-- [x] Layer compositing pipeline (CPU) with Porter-Duff alpha compositing
-- [x] Layer operations: reorder, duplicate, merge down, flatten visible
-- [x] Layer groups with nested compositing (recursive group rendering)
-- [x] Opacity and visibility
-- [x] Undo/redo command system (all operations reversible: merge, group, ungroup)
-
-## Phase 3 — Rendering Pipeline ✓
-
-**Goal**: CPU-based renderer that produces correct output.
-
-- [x] Document renderer — flatten all layers to RGBA buffer (`renderer::render()`, `to_rgba_bytes()`)
-- [x] Filter pipeline: brightness/contrast, hue/saturation, curves, levels + blur, sharpen, invert, grayscale
-- [x] Color management: sRGB, linear, Display P3 (linear-to-sRGB conversion in render path)
-- [x] Tile-based rendering for large documents (256x256 tiles via `tile_coords()`)
-- [x] Render cache — dirty tile tracking with region invalidation (`RenderCache`)
-- [x] Adjustment layer compositing — adjustment layers apply filters during compositing
-
-## Phase 4 — Storage & Formats ✓
-
-**Goal**: Open and save real image files.
-
-- [x] PNG import/export
-- [x] JPEG import/export (quality settings wired to encoder via `JpegEncoder::new_with_quality`)
-- [x] WebP import/export
-- [x] TIFF import/export (+ BMP, GIF)
-- [x] Native `.rasa` project format (magic header, JSON metadata, binary pixel data with sRGB conversion)
-- [x] Recent files / project catalog (SQLite via rusqlite — upsert, recent list, remove, clear)
-
-## Phase 5 — Basic Tools ✓
-
-**Goal**: Core editing tools for manual image editing.
-
-- [x] Brush engine: size, opacity, hardness, pressure sensitivity, round/square tips, spacing
-- [x] Eraser tool (alpha reduction with same brush dynamics)
-- [x] Selection tools: rectangle, ellipse, freeform lasso (+ mask-based)
-- [x] Selection operations: add, subtract, intersect, invert (mask-based combine)
-- [x] Transform tool: move, scale, rotate, skew (affine transform with bilinear interpolation)
-- [x] Crop tool (region extraction with bounds clamping)
-- [x] Eyedropper / color picker (linear + sRGB u8 output)
-- [x] Fill and gradient tools (flood fill with tolerance, selection fill, linear gradient)
-
-## Phase 6 — GPU Acceleration ✓
-
-**Goal**: Move compositing and filters to Vulkan compute.
-
-- [x] wgpu device initialization and capability detection (Vulkan/Metal, high-perf adapter selection)
-- [x] GPU layer compositing (Normal, Multiply, Screen via compute shaders; others CPU fallback)
-- [x] GPU filters: invert, grayscale, brightness/contrast via compute; blur/sharpen CPU path
-- [x] GPU brush dab compute shader (round tip with hardness falloff)
-- [x] CPU fallback path for systems without Vulkan (graceful degradation)
-- [x] Performance benchmarks (CPU baseline with MP/s metrics; GPU comparison when available)
-- [x] 9 WGSL compute shaders: composite (Normal/Multiply/Screen), invert, grayscale, brightness/contrast, blur H/V, brush dab
-
-## Phase 7 — AI Foundation ✓
-
-**Goal**: Inference pipeline ready for AI features.
-
-- [x] Synapse HTTP API client for remote inference (replaces local ONNX — architectural decision)
-- [x] Model management: ModelId, ModelInfo, ModelKind, preset models (SD Inpaint, RealESRGAN, SAM, SDXL, U2Net)
-- [x] hoosh/Synapse API client with all endpoints (inpaint, upscale, segment, generate, remove-bg)
-- [x] Pre-processing pipeline (PixelBuffer → PNG bytes with sRGB conversion)
-- [x] Post-processing pipeline (PNG → PixelBuffer with linear conversion, mask extraction)
-- [x] Progress tracking and cancellation (TaskHandle, ProgressCallback, cancel support)
-
-## Phase 8 — AI Features ✓
-
-**Goal**: Ship the AI features that differentiate Rasa.
-
-- [x] **Inpainting**: mask region + prompt-driven regeneration via Synapse API
-- [x] **Upscaling**: 2x and 4x super-resolution (ScaleFactor enum, RealESRGAN default)
-- [x] **Background removal**: automatic subject segmentation (U2Net default)
-- [x] **Generative fill**: text-prompt-driven content generation with feathered blending
-- [x] **AI selection**: intelligent segmentation → Selection conversion (SAM ViT-H default)
-- [x] Selection → AI pipeline integration (extract region, apply result, blend with feathering)
-
-## Phase 9 — MCP & Agnoshi ✓
-
-**Goal**: Platform integration for Claude and AGNOS voice control.
-
-- [x] MCP 2.0 server (stdio transport, JSON-RPC 2.0 protocol, initialize/tools/list/tools/call)
-- [x] 5 MCP tools: `rasa_open_image`, `rasa_edit_layer`, `rasa_apply_filter`, `rasa_get_document`, `rasa_export`
-- [x] 5 agnoshi intents: `rasa.open`, `rasa.filter`, `rasa.layer`, `rasa.export`, `rasa.ai`
-- [x] `.agnos-agent.json` bundle (intents + MCP transport config)
-- [x] Session state management for multi-document MCP workflows
-
-## Phase 10 — UI Shell ✓
-
-**Goal**: Desktop-ready GUI application.
-
-- [x] Main window with menu bar (File, Edit, View, Layer, Filter menus)
-- [x] Canvas viewport: pan (middle-click), zoom (scroll wheel), pixel grid (at 4x+ zoom), rulers
-- [x] Tool palette (9 tools: Brush, Eraser, Move, Selection, Eyedropper, Fill, Gradient, Crop, Transform)
-- [x] Layer panel: visibility toggle, opacity slider, blend mode combo, click-to-select
-- [x] Properties panel: tool-specific settings (brush size/opacity/hardness), color info
-- [x] Color picker: RGB color edit button + hex display
-- [x] History panel (undo/redo buttons)
-- [x] Keyboard shortcuts (B/E/M/S/I/F/G/C/T for tools, Ctrl+Z/Ctrl+Shift+Z, +/- zoom)
-- [x] Built with egui/eframe (Wayland-compatible via winit backend)
+| Phase | Goal | Status |
+|-------|------|--------|
+| 1 — Foundation | Workspace + core types, error hierarchy, serde tests | Done |
+| 2 — Canvas & Layers | 12 blend modes, compositing, groups, merge, undo/redo | Done |
+| 3 — Rendering Pipeline | CPU renderer, 8 filters, tile cache, adjustment layers | Done |
+| 4 — Storage & Formats | PNG/JPEG/WebP/TIFF/BMP/GIF, `.rasa` format, SQLite catalog | Done |
+| 5 — Basic Tools | Brush, eraser, selection, transform, crop, fill, gradient | Done |
+| 6 — GPU Acceleration | wgpu init, 9 WGSL shaders, compute pipeline, benchmarks | Done |
+| 7 — AI Foundation | Synapse API client, model management, pre/post-processing | Done |
+| 8 — AI Features | Inpainting, upscaling, background removal, generative fill | Done |
+| 9 — MCP & Agnoshi | 5 MCP tools, 5 agnoshi intents, `.agnos-agent` bundle | Done |
+| 10 — UI Shell | egui desktop app, canvas, panels, shortcuts | Done |
 
 ---
 

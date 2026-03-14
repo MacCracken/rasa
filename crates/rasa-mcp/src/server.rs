@@ -259,4 +259,51 @@ mod tests {
         let result = resp.result.unwrap();
         assert_eq!(result["isError"], true);
     }
+
+    #[test]
+    fn handle_notifications_initialized() {
+        let state = SessionState::new();
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(10)),
+            method: "notifications/initialized".into(),
+            params: json!({}),
+        };
+        let resp = handle_request(&state, &req);
+        assert!(resp.result.is_some());
+        assert!(resp.error.is_none());
+    }
+
+    #[test]
+    fn server_info_has_version() {
+        let info = server_info();
+        assert!(info["serverInfo"]["name"].as_str().unwrap().contains("rasa"));
+        assert!(info["protocolVersion"].is_string());
+        assert!(info["capabilities"]["tools"].is_object());
+    }
+
+    #[test]
+    fn response_serializes_without_null_fields() {
+        let resp = JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: json!(1),
+            result: Some(json!({"ok": true})),
+            error: None,
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(!json.contains("\"error\""));
+    }
+
+    #[test]
+    fn error_response_serializes_without_result() {
+        let resp = JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: json!(1),
+            result: None,
+            error: Some(JsonRpcError { code: -32600, message: "bad".into() }),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(!json.contains("\"result\""));
+        assert!(json.contains("-32600"));
+    }
 }
