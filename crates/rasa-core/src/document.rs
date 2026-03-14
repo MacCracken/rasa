@@ -23,7 +23,12 @@ pub struct Document {
 }
 
 impl Document {
+    /// Maximum dimension (width or height) for a document.
+    pub const MAX_DIMENSION: u32 = 65536;
+
     pub fn new(name: impl Into<String>, width: u32, height: u32) -> Self {
+        let width = width.clamp(1, Self::MAX_DIMENSION);
+        let height = height.clamp(1, Self::MAX_DIMENSION);
         let bg = Layer::new_raster("Background", width, height);
         let bg_id = bg.id;
         let pixel_data = vec![(
@@ -109,7 +114,7 @@ impl Document {
 
     pub fn reorder_layer(&mut self, id: Uuid, new_index: usize) -> Result<(), RasaError> {
         let from = self.layer_index(id).ok_or(RasaError::LayerNotFound(id))?;
-        let to = new_index.min(self.layers.len() - 1);
+        let to = new_index.min(self.layers.len().saturating_sub(1));
         if from == to {
             return Ok(());
         }
@@ -424,7 +429,7 @@ impl Document {
         let cmd = self
             .history_mut()
             .undo()
-            .ok_or_else(|| RasaError::Other("nothing to undo".into()))?;
+            .ok_or(RasaError::NothingToUndo)?;
         self.apply_inverse(&cmd);
         Ok(())
     }
@@ -433,7 +438,7 @@ impl Document {
         let cmd = self
             .history_mut()
             .redo()
-            .ok_or_else(|| RasaError::Other("nothing to redo".into()))?;
+            .ok_or(RasaError::NothingToRedo)?;
         self.apply_forward(&cmd);
         Ok(())
     }

@@ -25,7 +25,7 @@ pub fn apply_adjustment(buf: &mut PixelBuffer, adj: &Adjustment) {
 
 /// Brightness: -1.0 to 1.0, Contrast: -1.0 to 1.0
 fn apply_brightness_contrast(buf: &mut PixelBuffer, brightness: f32, contrast: f32) {
-    let factor = (1.0 + contrast) / (1.0 - contrast.min(0.9999));
+    let factor = (1.0 + contrast) / (1.0 - contrast.clamp(-0.9999, 0.9999));
     for px in buf.pixels_mut() {
         let a = px.a;
         px.r = ((px.r + brightness) * factor + 0.5 * (1.0 - factor)).clamp(0.0, 1.0);

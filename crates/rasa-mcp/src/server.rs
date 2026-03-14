@@ -21,7 +21,9 @@ pub struct JsonRpcRequest {
 pub struct JsonRpcResponse {
     pub jsonrpc: String,
     pub id: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<JsonRpcError>,
 }
 
@@ -153,6 +155,13 @@ pub fn run_stdio() {
                 continue;
             }
         };
+
+        // JSON-RPC notifications (no id) must not receive a response
+        if request.id.is_none() {
+            // Still process the request for side effects
+            let _ = handle_request(&state, &request);
+            continue;
+        }
 
         let response = handle_request(&state, &request);
         let response_json = serde_json::to_string(&response).unwrap();

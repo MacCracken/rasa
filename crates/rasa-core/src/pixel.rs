@@ -9,8 +9,14 @@ pub struct PixelBuffer {
 }
 
 impl PixelBuffer {
+    /// Maximum pixels per buffer (256 megapixels).
+    const MAX_PIXELS: usize = 256 * 1024 * 1024;
+
     pub fn new(width: u32, height: u32) -> Self {
-        let len = (width as usize) * (height as usize);
+        let len = (width as usize)
+            .checked_mul(height as usize)
+            .unwrap_or(0)
+            .min(Self::MAX_PIXELS);
         Self {
             width,
             height,
@@ -19,7 +25,10 @@ impl PixelBuffer {
     }
 
     pub fn filled(width: u32, height: u32, color: Color) -> Self {
-        let len = (width as usize) * (height as usize);
+        let len = (width as usize)
+            .checked_mul(height as usize)
+            .unwrap_or(0)
+            .min(Self::MAX_PIXELS);
         Self {
             width,
             height,

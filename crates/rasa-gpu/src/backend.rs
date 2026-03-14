@@ -41,14 +41,17 @@ impl RenderBackend for CpuBackend {
     }
 
     fn composite(&self, dst: &mut PixelBuffer, src: &PixelBuffer, mode: BlendMode, opacity: f32) {
-        let w = dst.width.min(src.width);
-        let h = dst.height.min(src.height);
+        let w = dst.width.min(src.width) as usize;
+        let h = dst.height.min(src.height) as usize;
+        let dst_w = dst.width as usize;
+        let src_w = src.width as usize;
+        let dst_pixels = dst.pixels_mut();
+        let src_pixels = src.pixels();
         for y in 0..h {
+            let dr = y * dst_w;
+            let sr = y * src_w;
             for x in 0..w {
-                let base = dst.get(x, y).unwrap();
-                let top = src.get(x, y).unwrap();
-                let result = rasa_core::blend::blend(base, top, mode, opacity);
-                dst.set(x, y, result);
+                dst_pixels[dr + x] = rasa_core::blend::blend(dst_pixels[dr + x], src_pixels[sr + x], mode, opacity);
             }
         }
     }
@@ -62,7 +65,7 @@ impl RenderBackend for CpuBackend {
     }
 
     fn brightness_contrast(&self, buf: &mut PixelBuffer, brightness: f32, contrast: f32) {
-        let factor = (1.0 + contrast) / (1.0 - contrast.min(0.9999));
+        let factor = (1.0 + contrast) / (1.0 - contrast.clamp(-0.9999, 0.9999));
         for px in buf.pixels_mut() {
             let a = px.a;
             px.r = ((px.r + brightness) * factor + 0.5 * (1.0 - factor)).clamp(0.0, 1.0);
@@ -148,7 +151,6 @@ impl RenderBackend for GpuBackend {
 
     fn gaussian_blur(&self, buf: &mut PixelBuffer, radius: u32) {
         // Blur requires multi-pass with intermediate buffers — CPU path for now
-        // (GPU blur pipeline needs separate horizontal+vertical dispatch with kernel upload)
         cpu_gaussian_blur(buf, radius);
     }
 
@@ -206,7 +208,7 @@ impl RenderBackend for GpuBackend {
     }
 }
 
-// ── CPU filter implementations (shared by both backends) ──
+// ── CPU filter implementations (used by CpuBackend and GpuBackend fallback) ──
 
 fn cpu_gaussian_blur(buf: &mut PixelBuffer, radius: u32) {
     if radius == 0 {
@@ -214,43 +216,53 @@ fn cpu_gaussian_blur(buf: &mut PixelBuffer, radius: u32) {
     }
     let kernel = build_gaussian_kernel(radius);
     let (w, h) = buf.dimensions();
+    let w = w as usize;
+    let h = h as usize;
 
     // Horizontal pass
-    let mut temp = PixelBuffer::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            let mut r = 0.0_f32;
-            let mut g = 0.0_f32;
-            let mut b = 0.0_f32;
-            let mut a = 0.0_f32;
-            for (i, &weight) in kernel.iter().enumerate() {
-                let sx = (x as i32 + i as i32 - radius as i32).clamp(0, w as i32 - 1) as u32;
-                let px = buf.get(sx, y).unwrap();
-                r += px.r * weight;
-                g += px.g * weight;
-                b += px.b * weight;
-                a += px.a * weight;
+    let mut temp = PixelBuffer::new(w as u32, h as u32);
+    {
+        let src = buf.pixels();
+        let dst = temp.pixels_mut();
+        for y in 0..h {
+            for x in 0..w {
+                let mut r = 0.0_f32;
+                let mut g = 0.0_f32;
+                let mut b = 0.0_f32;
+                let mut a = 0.0_f32;
+                for (i, &weight) in kernel.iter().enumerate() {
+                    let sx = (x as i32 + i as i32 - radius as i32).clamp(0, w as i32 - 1) as usize;
+                    let px = src[y * w + sx];
+                    r += px.r * weight;
+                    g += px.g * weight;
+                    b += px.b * weight;
+                    a += px.a * weight;
+                }
+                dst[y * w + x] = rasa_core::color::Color::new(r, g, b, a);
             }
-            temp.set(x, y, rasa_core::color::Color::new(r, g, b, a));
         }
     }
 
     // Vertical pass
-    for y in 0..h {
-        for x in 0..w {
-            let mut r = 0.0_f32;
-            let mut g = 0.0_f32;
-            let mut b = 0.0_f32;
-            let mut a = 0.0_f32;
-            for (i, &weight) in kernel.iter().enumerate() {
-                let sy = (y as i32 + i as i32 - radius as i32).clamp(0, h as i32 - 1) as u32;
-                let px = temp.get(x, sy).unwrap();
-                r += px.r * weight;
-                g += px.g * weight;
-                b += px.b * weight;
-                a += px.a * weight;
+    {
+        let src = temp.pixels();
+        let dst = buf.pixels_mut();
+        for y in 0..h {
+            for x in 0..w {
+                let mut r = 0.0_f32;
+                let mut g = 0.0_f32;
+                let mut b = 0.0_f32;
+                let mut a = 0.0_f32;
+                for (i, &weight) in kernel.iter().enumerate() {
+                    let sy = (y as i32 + i as i32 - radius as i32).clamp(0, h as i32 - 1) as usize;
+                    let px = src[sy * w + x];
+                    r += px.r * weight;
+                    g += px.g * weight;
+                    b += px.b * weight;
+                    a += px.a * weight;
+                }
+                dst[y * w + x] = rasa_core::color::Color::new(r, g, b, a);
             }
-            buf.set(x, y, rasa_core::color::Color::new(r, g, b, a));
         }
     }
 }
@@ -261,28 +273,16 @@ fn cpu_sharpen(buf: &mut PixelBuffer, radius: u32, amount: f32) {
     }
     let (w, h) = buf.dimensions();
     let mut blurred = PixelBuffer::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            blurred.set(x, y, buf.get(x, y).unwrap());
-        }
-    }
+    blurred.pixels_mut().copy_from_slice(buf.pixels());
     cpu_gaussian_blur(&mut blurred, radius);
 
-    for y in 0..h {
-        for x in 0..w {
-            let orig = buf.get(x, y).unwrap();
-            let blur = blurred.get(x, y).unwrap();
-            buf.set(
-                x,
-                y,
-                rasa_core::color::Color::new(
-                    (orig.r + amount * (orig.r - blur.r)).clamp(0.0, 1.0),
-                    (orig.g + amount * (orig.g - blur.g)).clamp(0.0, 1.0),
-                    (orig.b + amount * (orig.b - blur.b)).clamp(0.0, 1.0),
-                    orig.a,
-                ),
-            );
-        }
+    let src = blurred.pixels();
+    let dst = buf.pixels_mut();
+    for (i, px) in dst.iter_mut().enumerate() {
+        let blur = src[i];
+        px.r = (px.r + amount * (px.r - blur.r)).clamp(0.0, 1.0);
+        px.g = (px.g + amount * (px.g - blur.g)).clamp(0.0, 1.0);
+        px.b = (px.b + amount * (px.b - blur.b)).clamp(0.0, 1.0);
     }
 }
 

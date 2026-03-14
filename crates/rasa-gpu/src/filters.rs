@@ -14,11 +14,22 @@ pub fn apply_adjustment_with_backend(
             brightness,
             contrast,
         } => backend.brightness_contrast(buf, *brightness, *contrast),
-        // Hue/saturation, curves, levels remain CPU-only for now
-        // (complex operations that benefit less from GPU parallelism)
-        _ => {
-            // Delegate to CPU engine filters
-            crate::backend::CpuBackend.brightness_contrast(buf, 0.0, 0.0);
+        // Hue/saturation, curves, levels — delegate to CPU backend
+        // (these don't benefit enough from GPU to warrant shader implementations)
+        Adjustment::HueSaturation { hue, saturation, lightness } => {
+            for px in buf.pixels_mut() {
+                if px.a <= 0.0 { continue; }
+                let a = px.a;
+                let (mut h, mut s, mut l) = px.to_hsl();
+                h = (h + hue).rem_euclid(360.0);
+                s = (s + saturation).clamp(0.0, 1.0);
+                l = (l + lightness).clamp(0.0, 1.0);
+                *px = rasa_core::color::Color::from_hsl(h, s, l, a);
+            }
+        }
+        Adjustment::Curves { .. } | Adjustment::Levels { .. } => {
+            // These require LUT/gamma operations that are CPU-only for now
+            // No-op if backend can't handle — caller should use rasa_engine::filters directly
         }
     }
 }

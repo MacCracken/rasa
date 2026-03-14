@@ -56,6 +56,9 @@ impl Selection {
                 height,
                 data,
             } => {
+                if point.x < 0.0 || point.y < 0.0 {
+                    return false;
+                }
                 let x = point.x as u32;
                 let y = point.y as u32;
                 if x < *width && y < *height {

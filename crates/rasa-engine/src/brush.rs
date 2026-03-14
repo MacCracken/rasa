@@ -198,7 +198,7 @@ fn dab_alpha(px: f64, py: f64, center: Point, radius: f32, hardness: f32, tip: B
                 0.0
             } else {
                 let t = dist / radius;
-                let soft_start = hardness;
+                let soft_start = hardness.min(0.999);
                 if t <= soft_start {
                     1.0
                 } else {

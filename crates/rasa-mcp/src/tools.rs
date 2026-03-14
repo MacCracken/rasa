@@ -122,10 +122,18 @@ pub fn call_tool(
     }
 }
 
+/// Maximum dimension allowed via MCP (16384 = 16K).
+const MAX_MCP_DIMENSION: u32 = 16384;
+
 fn tool_open_image(state: &SessionState, args: &Value) -> Result<Value, String> {
     if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
+        let path = PathBuf::from(path);
+        // Validate the path exists and is a file
+        if !path.is_file() {
+            return Err(format!("file not found: {}", path.display()));
+        }
         let id = state
-            .open_image(&PathBuf::from(path))
+            .open_image(&path)
             .map_err(|e| e.to_string())?;
         let info = state
             .with_doc(id, |d| {
@@ -144,14 +152,16 @@ fn tool_open_image(state: &SessionState, args: &Value) -> Result<Value, String> 
             .get("name")
             .and_then(|v| v.as_str())
             .unwrap_or("Untitled");
-        let width = args
+        let width = (args
             .get("width")
             .and_then(|v| v.as_u64())
-            .unwrap_or(1920) as u32;
-        let height = args
+            .unwrap_or(1920) as u32)
+            .clamp(1, MAX_MCP_DIMENSION);
+        let height = (args
             .get("height")
             .and_then(|v| v.as_u64())
-            .unwrap_or(1080) as u32;
+            .unwrap_or(1080) as u32)
+            .clamp(1, MAX_MCP_DIMENSION);
         let id = state.create_document(name, width, height);
         Ok(json!({
             "document_id": id.to_string(),
@@ -398,6 +408,13 @@ fn tool_export(state: &SessionState, args: &Value) -> Result<Value, String> {
         .and_then(|v| v.as_str())
         .ok_or("missing path")?;
     let path = PathBuf::from(path_str);
+
+    // Validate parent directory exists
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.is_dir() {
+            return Err(format!("directory does not exist: {}", parent.display()));
+        }
+    }
 
     let format = rasa_storage::format::ImageFormat::from_path(&path)
         .ok_or_else(|| format!("unsupported format for: {path_str}"))?;

@@ -59,15 +59,20 @@ pub fn composite_layer(
     mode: BlendMode,
     opacity: f32,
 ) {
-    let w = dst.width.min(src.width);
-    let h = dst.height.min(src.height);
+    let w = dst.width.min(src.width) as usize;
+    let h = dst.height.min(src.height) as usize;
+    let dst_w = dst.width as usize;
+    let src_w = src.width as usize;
+    let dst_pixels = dst.pixels_mut();
+    let src_pixels = src.pixels();
 
     for y in 0..h {
+        let dst_row = y * dst_w;
+        let src_row = y * src_w;
         for x in 0..w {
-            let base = dst.get(x, y).unwrap();
-            let top = src.get(x, y).unwrap();
-            let result = blend(base, top, mode, opacity);
-            dst.set(x, y, result);
+            let base = dst_pixels[dst_row + x];
+            let top = src_pixels[src_row + x];
+            dst_pixels[dst_row + x] = blend(base, top, mode, opacity);
         }
     }
 }

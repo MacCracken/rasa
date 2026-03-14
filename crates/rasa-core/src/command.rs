@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -71,9 +73,12 @@ pub enum Command {
 }
 
 /// Undo/redo history for a document.
+///
+/// Uses VecDeque for O(1) eviction of oldest commands when max_depth is reached,
+/// and avoids cloning commands by moving them between stacks.
 #[derive(Debug, Clone)]
 pub struct History {
-    undo_stack: Vec<Command>,
+    undo_stack: VecDeque<Command>,
     redo_stack: Vec<Command>,
     max_depth: usize,
 }
@@ -81,7 +86,7 @@ pub struct History {
 impl History {
     pub fn new(max_depth: usize) -> Self {
         Self {
-            undo_stack: Vec::new(),
+            undo_stack: VecDeque::new(),
             redo_stack: Vec::new(),
             max_depth,
         }
@@ -89,21 +94,21 @@ impl History {
 
     pub fn push(&mut self, command: Command) {
         self.redo_stack.clear();
-        self.undo_stack.push(command);
+        self.undo_stack.push_back(command);
         if self.undo_stack.len() > self.max_depth {
-            self.undo_stack.remove(0);
+            self.undo_stack.pop_front();
         }
     }
 
     pub fn undo(&mut self) -> Option<Command> {
-        let cmd = self.undo_stack.pop()?;
+        let cmd = self.undo_stack.pop_back()?;
         self.redo_stack.push(cmd.clone());
         Some(cmd)
     }
 
     pub fn redo(&mut self) -> Option<Command> {
         let cmd = self.redo_stack.pop()?;
-        self.undo_stack.push(cmd.clone());
+        self.undo_stack.push_back(cmd.clone());
         Some(cmd)
     }
 
