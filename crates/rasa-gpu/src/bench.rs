@@ -128,7 +128,8 @@ pub fn run_gpu_benchmarks(size: u32, iterations: u32) -> Vec<BenchResult> {
             let gpu_backend = crate::backend::select_backend(false);
             let pixels = (size as u64) * (size as u64);
 
-            let ops: Vec<(&str, Box<dyn Fn(&dyn RenderBackend)>)> = vec![
+            type BenchOps<'a> = Vec<(&'a str, Box<dyn Fn(&dyn RenderBackend)>)>;
+            let ops: BenchOps = vec![
                 (
                     "composite_normal",
                     Box::new(move |b: &dyn RenderBackend| {

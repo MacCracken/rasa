@@ -161,7 +161,7 @@ impl RenderBackend for GpuBackend {
 
     fn brightness_contrast(&self, buf: &mut PixelBuffer, brightness: f32, contrast: f32) {
         let factor = (1.0 + contrast) / (1.0 - contrast.min(0.9999));
-        let pixel_count = (buf.width * buf.height) as u32;
+        let pixel_count = buf.width * buf.height;
         // Params: count, brightness, contrast_factor, padding
         let params: [u32; 4] = [pixel_count, brightness.to_bits(), factor.to_bits(), 0];
         let params_bytes: &[u8] =
@@ -175,7 +175,7 @@ impl RenderBackend for GpuBackend {
     }
 
     fn invert(&self, buf: &mut PixelBuffer) {
-        let pixel_count = (buf.width * buf.height) as u32;
+        let pixel_count = buf.width * buf.height;
         let params: [u32; 4] = [pixel_count, 0, 0, 0];
         let params_bytes: &[u8] =
             unsafe { std::slice::from_raw_parts(params.as_ptr() as *const u8, 16) };
@@ -188,7 +188,7 @@ impl RenderBackend for GpuBackend {
     }
 
     fn grayscale(&self, buf: &mut PixelBuffer) {
-        let pixel_count = (buf.width * buf.height) as u32;
+        let pixel_count = buf.width * buf.height;
         let params: [u32; 4] = [pixel_count, 0, 0, 0];
         let params_bytes: &[u8] =
             unsafe { std::slice::from_raw_parts(params.as_ptr() as *const u8, 16) };

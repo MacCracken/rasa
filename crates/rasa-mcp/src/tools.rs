@@ -406,10 +406,10 @@ fn tool_export(state: &SessionState, args: &Value) -> Result<Value, String> {
     let path = PathBuf::from(path_str);
 
     // Validate parent directory exists
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() && !parent.is_dir() {
-            return Err(format!("directory does not exist: {}", parent.display()));
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty() && !parent.is_dir()
+    {
+        return Err(format!("directory does not exist: {}", parent.display()));
     }
 
     let format = rasa_storage::format::ImageFormat::from_path(&path)
@@ -432,7 +432,7 @@ fn tool_export(state: &SessionState, args: &Value) -> Result<Value, String> {
                 .map_err(|e| e.to_string())
         })
         .map_err(|e| e.to_string())?
-        .map_err(|e| e)?;
+        ?;
 
     Ok(json!({
         "exported": true,

@@ -110,7 +110,7 @@ pub fn dispatch_pixel_shader(
             ],
         });
 
-    let workgroups = (pixel_count as u32 + 255) / 256;
+    let workgroups = (pixel_count as u32).div_ceil(256);
     let mut encoder = device
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -269,8 +269,8 @@ pub fn dispatch_composite_shader(
             ],
         });
 
-    let wg_x = (width + 15) / 16;
-    let wg_y = (height + 15) / 16;
+    let wg_x = width.div_ceil(16);
+    let wg_y = height.div_ceil(16);
     let mut encoder = device
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

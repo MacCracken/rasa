@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use egui;
 use rasa_core::Document;
-use rasa_core::color::BlendMode;
 use rasa_core::layer::Layer;
 
 use crate::canvas::CanvasState;
@@ -63,25 +62,25 @@ impl RasaApp {
                 }
                 ui.separator();
                 if ui.button("Export... (Ctrl+Shift+E)").clicked() {
-                    if let Some(doc) = &self.document {
-                        if let Some(path) = rfd_save_file() {
-                            let composited = rasa_engine::compositor::composite(doc);
-                            let format = rasa_storage::format::ImageFormat::from_path(&path);
-                            if let Some(fmt) = format {
-                                let settings =
-                                    rasa_storage::format::ExportSettings::for_format(fmt);
-                                match rasa_storage::export::export_buffer(
-                                    &composited,
-                                    &path,
-                                    &settings,
-                                ) {
-                                    Ok(()) => {
-                                        self.status_message =
-                                            format!("Exported: {}", path.display());
-                                    }
-                                    Err(e) => {
-                                        self.status_message = format!("Export error: {e}");
-                                    }
+                    if let Some(doc) = &self.document
+                        && let Some(path) = rfd_save_file()
+                    {
+                        let composited = rasa_engine::compositor::composite(doc);
+                        let format = rasa_storage::format::ImageFormat::from_path(&path);
+                        if let Some(fmt) = format {
+                            let settings =
+                                rasa_storage::format::ExportSettings::for_format(fmt);
+                            match rasa_storage::export::export_buffer(
+                                &composited,
+                                &path,
+                                &settings,
+                            ) {
+                                Ok(()) => {
+                                    self.status_message =
+                                        format!("Exported: {}", path.display());
+                                }
+                                Err(e) => {
+                                    self.status_message = format!("Export error: {e}");
                                 }
                             }
                         }
@@ -146,18 +145,18 @@ impl RasaApp {
                     ui.close_menu();
                 }
                 if ui.button("Duplicate Layer").clicked() {
-                    if let Some(doc) = &mut self.document {
-                        if let Some(id) = doc.active_layer {
-                            let _ = doc.duplicate_layer(id);
-                        }
+                    if let Some(doc) = &mut self.document
+                        && let Some(id) = doc.active_layer
+                    {
+                        let _ = doc.duplicate_layer(id);
                     }
                     ui.close_menu();
                 }
                 if ui.button("Merge Down").clicked() {
-                    if let Some(doc) = &mut self.document {
-                        if let Some(id) = doc.active_layer {
-                            let _ = doc.merge_down(id);
-                        }
+                    if let Some(doc) = &mut self.document
+                        && let Some(id) = doc.active_layer
+                    {
+                        let _ = doc.merge_down(id);
                     }
                     ui.close_menu();
                 }
@@ -184,16 +183,16 @@ impl RasaApp {
 
         ctx.input(|i| {
             // Ctrl+Z = Undo
-            if modifiers.ctrl && i.key_pressed(egui::Key::Z) && !modifiers.shift {
-                if let Some(doc) = &mut self.document {
-                    let _ = doc.undo();
-                }
+            if modifiers.ctrl && i.key_pressed(egui::Key::Z) && !modifiers.shift
+                && let Some(doc) = &mut self.document
+            {
+                let _ = doc.undo();
             }
             // Ctrl+Shift+Z = Redo
-            if modifiers.ctrl && modifiers.shift && i.key_pressed(egui::Key::Z) {
-                if let Some(doc) = &mut self.document {
-                    let _ = doc.redo();
-                }
+            if modifiers.ctrl && modifiers.shift && i.key_pressed(egui::Key::Z)
+                && let Some(doc) = &mut self.document
+            {
+                let _ = doc.redo();
             }
             // B = Brush
             if i.key_pressed(egui::Key::B) && !modifiers.ctrl {
@@ -307,18 +306,18 @@ impl eframe::App for RasaApp {
 // ── Helpers ──
 
 fn filter_invert(doc: &mut Document) {
-    if let Some(id) = doc.active_layer {
-        if let Some(buf) = doc.get_pixels_mut(id) {
-            rasa_engine::filters::invert(buf);
-        }
+    if let Some(id) = doc.active_layer
+        && let Some(buf) = doc.get_pixels_mut(id)
+    {
+        rasa_engine::filters::invert(buf);
     }
 }
 
 fn filter_grayscale(doc: &mut Document) {
-    if let Some(id) = doc.active_layer {
-        if let Some(buf) = doc.get_pixels_mut(id) {
-            rasa_engine::filters::grayscale(buf);
-        }
+    if let Some(id) = doc.active_layer
+        && let Some(buf) = doc.get_pixels_mut(id)
+    {
+        rasa_engine::filters::grayscale(buf);
     }
 }
 

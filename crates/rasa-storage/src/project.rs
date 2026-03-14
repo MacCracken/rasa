@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn save_skips_layers_without_pixels() {
-        let mut doc = Document::new("Test", 4, 4);
+        let doc = Document::new("Test", 4, 4);
         // The default background has pixels, but let's verify save doesn't crash
         // when we have the expected pixel data
         save(&doc, &test_dir().join("skip_test.rasa")).unwrap();

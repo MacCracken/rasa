@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Mutex;
 
 use rasa_core::Document;
@@ -8,6 +8,12 @@ use uuid::Uuid;
 /// Session state for the MCP server — manages open documents.
 pub struct SessionState {
     documents: Mutex<HashMap<Uuid, Document>>,
+}
+
+impl Default for SessionState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SessionState {
@@ -29,7 +35,7 @@ impl SessionState {
     }
 
     /// Open an image file as a new document.
-    pub fn open_image(&self, path: &PathBuf) -> Result<Uuid, rasa_core::error::RasaError> {
+    pub fn open_image(&self, path: &Path) -> Result<Uuid, rasa_core::error::RasaError> {
         let doc = rasa_storage::import::import_image(path)?;
         let id = doc.id;
         self.documents

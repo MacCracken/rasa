@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn eyedropper_srgb_converts() {
         let buf = PixelBuffer::filled(1, 1, Color::WHITE);
-        let [r, g, b, a] = eyedropper_srgb(&buf, 0, 0).unwrap();
+        let [r, _g, _b, a] = eyedropper_srgb(&buf, 0, 0).unwrap();
         assert_eq!(r, 255);
         assert_eq!(a, 255);
     }

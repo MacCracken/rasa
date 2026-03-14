@@ -61,10 +61,6 @@ mod tests {
     use crate::backend::CpuBackend;
     use rasa_core::color::Color;
 
-    fn approx_eq(a: f32, b: f32) -> bool {
-        (a - b).abs() < 0.02
-    }
-
     #[test]
     fn blur_via_backend() {
         let backend = CpuBackend;

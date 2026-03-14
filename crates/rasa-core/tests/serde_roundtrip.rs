@@ -21,7 +21,7 @@ where
 
 #[test]
 fn roundtrip_point() {
-    let p = Point { x: 3.14, y: -2.71 };
+    let p = Point { x: 3.15, y: -2.72 };
     let p2 = roundtrip(&p);
     assert_eq!(p, p2);
 }
