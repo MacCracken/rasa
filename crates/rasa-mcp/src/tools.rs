@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -107,11 +107,7 @@ pub fn list_tools() -> Vec<ToolDef> {
 }
 
 /// Call a tool by name with the given arguments.
-pub fn call_tool(
-    state: &SessionState,
-    name: &str,
-    args: &Value,
-) -> Result<Value, String> {
+pub fn call_tool(state: &SessionState, name: &str, args: &Value) -> Result<Value, String> {
     match name {
         "rasa_open_image" => tool_open_image(state, args),
         "rasa_edit_layer" => tool_edit_layer(state, args),
@@ -132,9 +128,7 @@ fn tool_open_image(state: &SessionState, args: &Value) -> Result<Value, String> 
         if !path.is_file() {
             return Err(format!("file not found: {}", path.display()));
         }
-        let id = state
-            .open_image(&path)
-            .map_err(|e| e.to_string())?;
+        let id = state.open_image(&path).map_err(|e| e.to_string())?;
         let info = state
             .with_doc(id, |d| {
                 json!({
@@ -152,15 +146,9 @@ fn tool_open_image(state: &SessionState, args: &Value) -> Result<Value, String> 
             .get("name")
             .and_then(|v| v.as_str())
             .unwrap_or("Untitled");
-        let width = (args
-            .get("width")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1920) as u32)
+        let width = (args.get("width").and_then(|v| v.as_u64()).unwrap_or(1920) as u32)
             .clamp(1, MAX_MCP_DIMENSION);
-        let height = (args
-            .get("height")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1080) as u32)
+        let height = (args.get("height").and_then(|v| v.as_u64()).unwrap_or(1080) as u32)
             .clamp(1, MAX_MCP_DIMENSION);
         let id = state.create_document(name, width, height);
         Ok(json!({
@@ -302,7 +290,10 @@ fn tool_apply_filter(state: &SessionState, args: &Value) -> Result<Value, String
 
             match filter {
                 "brightness_contrast" => {
-                    let b = args.get("brightness").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                    let b = args
+                        .get("brightness")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0) as f32;
                     let c = args.get("contrast").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                     rasa_engine::filters::apply_adjustment(
                         buf,
@@ -314,8 +305,14 @@ fn tool_apply_filter(state: &SessionState, args: &Value) -> Result<Value, String
                 }
                 "hue_saturation" => {
                     let h = args.get("hue").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let s = args.get("saturation").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let l = args.get("lightness").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                    let s = args
+                        .get("saturation")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0) as f32;
+                    let l = args
+                        .get("lightness")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0) as f32;
                     rasa_engine::filters::apply_adjustment(
                         buf,
                         &rasa_core::layer::Adjustment::HueSaturation {
@@ -352,8 +349,7 @@ fn tool_apply_filter(state: &SessionState, args: &Value) -> Result<Value, String
 
 fn tool_get_document(state: &SessionState, args: &Value) -> Result<Value, String> {
     if let Some(id_str) = args.get("document_id").and_then(|v| v.as_str()) {
-        let doc_id =
-            Uuid::parse_str(id_str).map_err(|_| format!("invalid UUID: {id_str}"))?;
+        let doc_id = Uuid::parse_str(id_str).map_err(|_| format!("invalid UUID: {id_str}"))?;
         state
             .with_doc(doc_id, |d| {
                 let layers: Vec<Value> = d
@@ -419,17 +415,12 @@ fn tool_export(state: &SessionState, args: &Value) -> Result<Value, String> {
     let format = rasa_storage::format::ImageFormat::from_path(&path)
         .ok_or_else(|| format!("unsupported format for: {path_str}"))?;
 
-    let quality = args
-        .get("quality")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(90) as u8;
+    let quality = args.get("quality").and_then(|v| v.as_u64()).unwrap_or(90) as u8;
 
     let settings = match format {
-        rasa_storage::format::ImageFormat::Jpeg => {
-            rasa_storage::format::ExportSettings::Jpeg(rasa_storage::format::JpegQuality::new(
-                quality,
-            ))
-        }
+        rasa_storage::format::ImageFormat::Jpeg => rasa_storage::format::ExportSettings::Jpeg(
+            rasa_storage::format::JpegQuality::new(quality),
+        ),
         _ => rasa_storage::format::ExportSettings::for_format(format),
     };
 
@@ -504,11 +495,15 @@ mod tests {
     #[test]
     fn open_create_document() {
         let state = SessionState::new();
-        let result = call_tool(&state, "rasa_open_image", &json!({
-            "name": "Test Canvas",
-            "width": 800,
-            "height": 600,
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_open_image",
+            &json!({
+                "name": "Test Canvas",
+                "width": 800,
+                "height": 600,
+            }),
+        )
         .unwrap();
         assert_eq!(result["name"], "Test Canvas");
         assert_eq!(result["width"], 800);
@@ -607,17 +602,24 @@ mod tests {
     fn parse_blend_modes() {
         assert_eq!(parse_blend_mode("normal").unwrap(), BlendMode::Normal);
         assert_eq!(parse_blend_mode("Multiply").unwrap(), BlendMode::Multiply);
-        assert_eq!(parse_blend_mode("soft_light").unwrap(), BlendMode::SoftLight);
+        assert_eq!(
+            parse_blend_mode("soft_light").unwrap(),
+            BlendMode::SoftLight
+        );
         assert!(parse_blend_mode("bogus").is_err());
     }
 
     #[test]
     fn open_clamps_huge_dimensions() {
         let state = SessionState::new();
-        let result = call_tool(&state, "rasa_open_image", &json!({
-            "width": 99999,
-            "height": 99999,
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_open_image",
+            &json!({
+                "width": 99999,
+                "height": 99999,
+            }),
+        )
         .unwrap();
         assert!(result["width"].as_u64().unwrap() <= MAX_MCP_DIMENSION as u64);
         assert!(result["height"].as_u64().unwrap() <= MAX_MCP_DIMENSION as u64);
@@ -626,9 +628,13 @@ mod tests {
     #[test]
     fn open_nonexistent_file_errors() {
         let state = SessionState::new();
-        let result = call_tool(&state, "rasa_open_image", &json!({
-            "path": "/nonexistent/fake_image.png",
-        }));
+        let result = call_tool(
+            &state,
+            "rasa_open_image",
+            &json!({
+                "path": "/nonexistent/fake_image.png",
+            }),
+        );
         assert!(result.is_err());
     }
 
@@ -636,10 +642,14 @@ mod tests {
     fn export_bad_directory_errors() {
         let state = SessionState::new();
         let id = state.create_document("Test", 4, 4);
-        let result = call_tool(&state, "rasa_export", &json!({
-            "document_id": id.to_string(),
-            "path": "/nonexistent_dir/output.png",
-        }));
+        let result = call_tool(
+            &state,
+            "rasa_export",
+            &json!({
+                "document_id": id.to_string(),
+                "path": "/nonexistent_dir/output.png",
+            }),
+        );
         assert!(result.is_err());
     }
 
@@ -648,11 +658,15 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 10, 10);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "duplicate",
-            "layer_id": layer_id.to_string(),
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "duplicate",
+                "layer_id": layer_id.to_string(),
+            }),
+        )
         .unwrap();
         assert_eq!(result["action"], "duplicated");
         let count = state.with_doc(id, |d| d.layers.len()).unwrap();
@@ -664,12 +678,16 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 10, 10);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "rename",
-            "layer_id": layer_id.to_string(),
-            "name": "Renamed",
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "rename",
+                "layer_id": layer_id.to_string(),
+                "name": "Renamed",
+            }),
+        )
         .unwrap();
         assert_eq!(result["action"], "renamed");
     }
@@ -679,12 +697,16 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 8, 8);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_apply_filter", &json!({
-            "document_id": id.to_string(),
-            "layer_id": layer_id.to_string(),
-            "filter": "blur",
-            "radius": 2,
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_apply_filter",
+            &json!({
+                "document_id": id.to_string(),
+                "layer_id": layer_id.to_string(),
+                "filter": "blur",
+                "radius": 2,
+            }),
+        )
         .unwrap();
         assert_eq!(result["applied"], true);
     }
@@ -694,13 +716,17 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 4, 4);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_apply_filter", &json!({
-            "document_id": id.to_string(),
-            "layer_id": layer_id.to_string(),
-            "filter": "brightness_contrast",
-            "brightness": 0.2,
-            "contrast": 0.1,
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_apply_filter",
+            &json!({
+                "document_id": id.to_string(),
+                "layer_id": layer_id.to_string(),
+                "filter": "brightness_contrast",
+                "brightness": 0.2,
+                "contrast": 0.1,
+            }),
+        )
         .unwrap();
         assert_eq!(result["applied"], true);
     }
@@ -710,12 +736,16 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 10, 10);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "set_visibility",
-            "layer_id": layer_id.to_string(),
-            "visible": false,
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "set_visibility",
+                "layer_id": layer_id.to_string(),
+                "visible": false,
+            }),
+        )
         .unwrap();
         assert_eq!(result["action"], "visibility_set");
     }
@@ -725,12 +755,16 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 10, 10);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "set_blend_mode",
-            "layer_id": layer_id.to_string(),
-            "blend_mode": "multiply",
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "set_blend_mode",
+                "layer_id": layer_id.to_string(),
+                "blend_mode": "multiply",
+            }),
+        )
         .unwrap();
         assert_eq!(result["action"], "blend_mode_set");
     }
@@ -739,18 +773,27 @@ mod tests {
     fn edit_layer_reorder() {
         let state = SessionState::new();
         let id = state.create_document("Test", 10, 10);
-        call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "add",
-            "name": "Top",
-        })).unwrap();
+        call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add",
+                "name": "Top",
+            }),
+        )
+        .unwrap();
         let layer_id = state.with_doc(id, |d| d.layers[1].id).unwrap();
-        let result = call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "reorder",
-            "layer_id": layer_id.to_string(),
-            "index": 0,
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "reorder",
+                "layer_id": layer_id.to_string(),
+                "index": 0,
+            }),
+        )
         .unwrap();
         assert_eq!(result["action"], "reordered");
     }
@@ -759,17 +802,26 @@ mod tests {
     fn edit_layer_remove() {
         let state = SessionState::new();
         let id = state.create_document("Test", 10, 10);
-        call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "add",
-            "name": "Extra",
-        })).unwrap();
+        call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add",
+                "name": "Extra",
+            }),
+        )
+        .unwrap();
         let extra_id = state.with_doc(id, |d| d.layers[1].id).unwrap();
-        let result = call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "remove",
-            "layer_id": extra_id.to_string(),
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "remove",
+                "layer_id": extra_id.to_string(),
+            }),
+        )
         .unwrap();
         assert_eq!(result["action"], "removed");
     }
@@ -778,17 +830,26 @@ mod tests {
     fn edit_layer_merge_down() {
         let state = SessionState::new();
         let id = state.create_document("Test", 10, 10);
-        call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "add",
-            "name": "Upper",
-        })).unwrap();
+        call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add",
+                "name": "Upper",
+            }),
+        )
+        .unwrap();
         let upper_id = state.with_doc(id, |d| d.layers[1].id).unwrap();
-        let result = call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "merge_down",
-            "layer_id": upper_id.to_string(),
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "merge_down",
+                "layer_id": upper_id.to_string(),
+            }),
+        )
         .unwrap();
         assert_eq!(result["action"], "merged_down");
     }
@@ -798,11 +859,15 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 4, 4);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_apply_filter", &json!({
-            "document_id": id.to_string(),
-            "layer_id": layer_id.to_string(),
-            "filter": "grayscale",
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_apply_filter",
+            &json!({
+                "document_id": id.to_string(),
+                "layer_id": layer_id.to_string(),
+                "filter": "grayscale",
+            }),
+        )
         .unwrap();
         assert_eq!(result["applied"], true);
     }
@@ -812,13 +877,17 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 8, 8);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_apply_filter", &json!({
-            "document_id": id.to_string(),
-            "layer_id": layer_id.to_string(),
-            "filter": "sharpen",
-            "radius": 1,
-            "amount": 0.5,
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_apply_filter",
+            &json!({
+                "document_id": id.to_string(),
+                "layer_id": layer_id.to_string(),
+                "filter": "sharpen",
+                "radius": 1,
+                "amount": 0.5,
+            }),
+        )
         .unwrap();
         assert_eq!(result["applied"], true);
     }
@@ -828,13 +897,17 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 4, 4);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_apply_filter", &json!({
-            "document_id": id.to_string(),
-            "layer_id": layer_id.to_string(),
-            "filter": "hue_saturation",
-            "hue": 30.0,
-            "saturation": 0.1,
-        }))
+        let result = call_tool(
+            &state,
+            "rasa_apply_filter",
+            &json!({
+                "document_id": id.to_string(),
+                "layer_id": layer_id.to_string(),
+                "filter": "hue_saturation",
+                "hue": 30.0,
+                "saturation": 0.1,
+            }),
+        )
         .unwrap();
         assert_eq!(result["applied"], true);
     }
@@ -844,11 +917,15 @@ mod tests {
         let state = SessionState::new();
         let id = state.create_document("Test", 4, 4);
         let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
-        let result = call_tool(&state, "rasa_apply_filter", &json!({
-            "document_id": id.to_string(),
-            "layer_id": layer_id.to_string(),
-            "filter": "bogus_filter",
-        }));
+        let result = call_tool(
+            &state,
+            "rasa_apply_filter",
+            &json!({
+                "document_id": id.to_string(),
+                "layer_id": layer_id.to_string(),
+                "filter": "bogus_filter",
+            }),
+        );
         assert!(result.is_err());
     }
 
@@ -856,10 +933,14 @@ mod tests {
     fn edit_layer_unknown_action_errors() {
         let state = SessionState::new();
         let id = state.create_document("Test", 10, 10);
-        let result = call_tool(&state, "rasa_edit_layer", &json!({
-            "document_id": id.to_string(),
-            "action": "explode",
-        }));
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "explode",
+            }),
+        );
         assert!(result.is_err());
     }
 }

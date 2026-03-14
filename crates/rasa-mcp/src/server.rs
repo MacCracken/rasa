@@ -187,7 +187,12 @@ mod tests {
         assert!(resp.result.is_some());
         assert!(resp.error.is_none());
         let result = resp.result.unwrap();
-        assert!(result["serverInfo"]["name"].as_str().unwrap().contains("rasa"));
+        assert!(
+            result["serverInfo"]["name"]
+                .as_str()
+                .unwrap()
+                .contains("rasa")
+        );
     }
 
     #[test]
@@ -277,7 +282,12 @@ mod tests {
     #[test]
     fn server_info_has_version() {
         let info = server_info();
-        assert!(info["serverInfo"]["name"].as_str().unwrap().contains("rasa"));
+        assert!(
+            info["serverInfo"]["name"]
+                .as_str()
+                .unwrap()
+                .contains("rasa")
+        );
         assert!(info["protocolVersion"].is_string());
         assert!(info["capabilities"]["tools"].is_object());
     }
@@ -300,7 +310,10 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: json!(1),
             result: None,
-            error: Some(JsonRpcError { code: -32600, message: "bad".into() }),
+            error: Some(JsonRpcError {
+                code: -32600,
+                message: "bad".into(),
+            }),
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert!(!json.contains("\"result\""));

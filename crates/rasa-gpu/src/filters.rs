@@ -16,9 +16,15 @@ pub fn apply_adjustment_with_backend(
         } => backend.brightness_contrast(buf, *brightness, *contrast),
         // Hue/saturation, curves, levels — delegate to CPU backend
         // (these don't benefit enough from GPU to warrant shader implementations)
-        Adjustment::HueSaturation { hue, saturation, lightness } => {
+        Adjustment::HueSaturation {
+            hue,
+            saturation,
+            lightness,
+        } => {
             for px in buf.pixels_mut() {
-                if px.a <= 0.0 { continue; }
+                if px.a <= 0.0 {
+                    continue;
+                }
                 let a = px.a;
                 let (mut h, mut s, mut l) = px.to_hsl();
                 h = (h + hue).rem_euclid(360.0);

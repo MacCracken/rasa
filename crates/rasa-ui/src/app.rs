@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use egui;
+use rasa_core::Document;
 use rasa_core::color::BlendMode;
 use rasa_core::layer::Layer;
-use rasa_core::Document;
 
 use crate::canvas::CanvasState;
 use crate::panels;
@@ -51,8 +51,7 @@ impl RasaApp {
                     if let Some(path) = rfd_open_file() {
                         match rasa_storage::import::import_image(&path) {
                             Ok(doc) => {
-                                self.status_message =
-                                    format!("Opened: {}", path.display());
+                                self.status_message = format!("Opened: {}", path.display());
                                 self.document = Some(doc);
                             }
                             Err(e) => {
@@ -96,14 +95,8 @@ impl RasaApp {
             });
 
             ui.menu_button("Edit", |ui| {
-                let can_undo = self
-                    .document
-                    .as_ref()
-                    .is_some_and(|d| d.can_undo());
-                let can_redo = self
-                    .document
-                    .as_ref()
-                    .is_some_and(|d| d.can_redo());
+                let can_undo = self.document.as_ref().is_some_and(|d| d.can_undo());
+                let can_redo = self.document.as_ref().is_some_and(|d| d.can_redo());
                 if ui
                     .add_enabled(can_undo, egui::Button::new("Undo (Ctrl+Z)"))
                     .clicked()
@@ -148,11 +141,7 @@ impl RasaApp {
                     if let Some(doc) = &mut self.document {
                         let (w, h) = (doc.size.width, doc.size.height);
                         let count = doc.layers.len();
-                        doc.add_layer(Layer::new_raster(
-                            format!("Layer {}", count),
-                            w,
-                            h,
-                        ));
+                        doc.add_layer(Layer::new_raster(format!("Layer {}", count), w, h));
                     }
                     ui.close_menu();
                 }

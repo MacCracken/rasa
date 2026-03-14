@@ -337,8 +337,14 @@ mod tests {
             ..Default::default()
         };
         let points = vec![
-            StrokePoint { position: Point { x: 5.0, y: 5.0 }, pressure: 1.0 },
-            StrokePoint { position: Point { x: 25.0, y: 5.0 }, pressure: 1.0 },
+            StrokePoint {
+                position: Point { x: 5.0, y: 5.0 },
+                pressure: 1.0,
+            },
+            StrokePoint {
+                position: Point { x: 25.0, y: 5.0 },
+                pressure: 1.0,
+            },
         ];
         erase_stroke(&mut buf, &points, &settings);
         let mid = buf.get(15, 5).unwrap();
@@ -352,10 +358,14 @@ mod tests {
             size: 6.0,
             ..Default::default()
         };
-        erase_stroke(&mut buf, &[StrokePoint {
-            position: Point { x: 10.0, y: 10.0 },
-            pressure: 1.0,
-        }], &settings);
+        erase_stroke(
+            &mut buf,
+            &[StrokePoint {
+                position: Point { x: 10.0, y: 10.0 },
+                pressure: 1.0,
+            }],
+            &settings,
+        );
         let px = buf.get(10, 10).unwrap();
         assert!(px.a < 1.0);
     }
@@ -376,10 +386,14 @@ mod tests {
             color: Color::new(1.0, 0.0, 0.0, 1.0),
             ..Default::default()
         };
-        paint_stroke(&mut buf, &[StrokePoint {
-            position: Point { x: 10.0, y: 10.0 },
-            pressure: 1.0,
-        }], &settings);
+        paint_stroke(
+            &mut buf,
+            &[StrokePoint {
+                position: Point { x: 10.0, y: 10.0 },
+                pressure: 1.0,
+            }],
+            &settings,
+        );
         let px = buf.get(10, 10).unwrap();
         assert!(px.a > 0.5);
     }

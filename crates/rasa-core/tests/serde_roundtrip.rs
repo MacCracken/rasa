@@ -66,7 +66,11 @@ fn roundtrip_color_constants() {
 
 #[test]
 fn roundtrip_color_space_all_variants() {
-    for cs in [ColorSpace::Srgb, ColorSpace::LinearRgb, ColorSpace::DisplayP3] {
+    for cs in [
+        ColorSpace::Srgb,
+        ColorSpace::LinearRgb,
+        ColorSpace::DisplayP3,
+    ] {
         let cs2 = roundtrip(&cs);
         assert_eq!(cs, cs2);
     }
@@ -203,7 +207,13 @@ fn roundtrip_layer_raster() {
     assert_eq!(layer.visible, layer2.visible);
     assert_eq!(layer.locked, layer2.locked);
     assert_eq!(layer.blend_mode, layer2.blend_mode);
-    assert!(matches!(layer2.kind, LayerKind::Raster { width: 1920, height: 1080 }));
+    assert!(matches!(
+        layer2.kind,
+        LayerKind::Raster {
+            width: 1920,
+            height: 1080
+        }
+    ));
 }
 
 #[test]
@@ -241,8 +251,10 @@ fn roundtrip_layer_adjustment() {
     });
     let json = serde_json::to_string(&layer).unwrap();
     let layer2: Layer = serde_json::from_str(&json).unwrap();
-    if let LayerKind::Adjustment(Adjustment::BrightnessContrast { brightness, contrast }) =
-        layer2.kind
+    if let LayerKind::Adjustment(Adjustment::BrightnessContrast {
+        brightness,
+        contrast,
+    }) = layer2.kind
     {
         assert_eq!(brightness, 0.3);
         assert_eq!(contrast, -0.1);
@@ -278,7 +290,12 @@ fn roundtrip_adjustment_hue_saturation() {
         lightness: -0.2,
     };
     let adj2 = roundtrip(&adj);
-    if let Adjustment::HueSaturation { hue, saturation, lightness } = adj2 {
+    if let Adjustment::HueSaturation {
+        hue,
+        saturation,
+        lightness,
+    } = adj2
+    {
         assert_eq!(hue, 120.0);
         assert_eq!(saturation, 0.5);
         assert_eq!(lightness, -0.2);
@@ -308,7 +325,12 @@ fn roundtrip_adjustment_levels() {
         gamma: 1.2,
     };
     let adj2 = roundtrip(&adj);
-    if let Adjustment::Levels { black, white, gamma } = adj2 {
+    if let Adjustment::Levels {
+        black,
+        white,
+        gamma,
+    } = adj2
+    {
         assert_eq!(black, 0.1);
         assert_eq!(white, 0.9);
         assert_eq!(gamma, 1.2);

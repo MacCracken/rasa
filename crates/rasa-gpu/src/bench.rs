@@ -129,19 +129,30 @@ pub fn run_gpu_benchmarks(size: u32, iterations: u32) -> Vec<BenchResult> {
             let pixels = (size as u64) * (size as u64);
 
             let ops: Vec<(&str, Box<dyn Fn(&dyn RenderBackend)>)> = vec![
-                ("composite_normal", Box::new(move |b: &dyn RenderBackend| {
-                    let mut dst = PixelBuffer::filled(size, size, Color::WHITE);
-                    let src = PixelBuffer::filled(size, size, Color::new(1.0, 0.0, 0.0, 0.5));
-                    b.composite(&mut dst, &src, BlendMode::Normal, 1.0);
-                })),
-                ("invert", Box::new(move |b: &dyn RenderBackend| {
-                    let mut buf = PixelBuffer::filled(size, size, Color::new(0.3, 0.6, 0.9, 1.0));
-                    b.invert(&mut buf);
-                })),
-                ("grayscale", Box::new(move |b: &dyn RenderBackend| {
-                    let mut buf = PixelBuffer::filled(size, size, Color::new(1.0, 0.0, 0.0, 1.0));
-                    b.grayscale(&mut buf);
-                })),
+                (
+                    "composite_normal",
+                    Box::new(move |b: &dyn RenderBackend| {
+                        let mut dst = PixelBuffer::filled(size, size, Color::WHITE);
+                        let src = PixelBuffer::filled(size, size, Color::new(1.0, 0.0, 0.0, 0.5));
+                        b.composite(&mut dst, &src, BlendMode::Normal, 1.0);
+                    }),
+                ),
+                (
+                    "invert",
+                    Box::new(move |b: &dyn RenderBackend| {
+                        let mut buf =
+                            PixelBuffer::filled(size, size, Color::new(0.3, 0.6, 0.9, 1.0));
+                        b.invert(&mut buf);
+                    }),
+                ),
+                (
+                    "grayscale",
+                    Box::new(move |b: &dyn RenderBackend| {
+                        let mut buf =
+                            PixelBuffer::filled(size, size, Color::new(1.0, 0.0, 0.0, 1.0));
+                        b.grayscale(&mut buf);
+                    }),
+                ),
             ];
 
             for (name, op) in &ops {

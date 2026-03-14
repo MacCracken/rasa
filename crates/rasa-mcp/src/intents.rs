@@ -71,7 +71,8 @@ pub fn list_intents() -> Vec<AgnosIntent> {
                     name: "filter".into(),
                     param_type: "string".into(),
                     required: true,
-                    description: "Filter name: blur, sharpen, invert, grayscale, brightness, contrast".into(),
+                    description:
+                        "Filter name: blur, sharpen, invert, grayscale, brightness, contrast".into(),
                 },
                 IntentParam {
                     name: "amount".into(),
@@ -101,7 +102,9 @@ pub fn list_intents() -> Vec<AgnosIntent> {
                     name: "action".into(),
                     param_type: "string".into(),
                     required: true,
-                    description: "Layer action: add, remove, rename, opacity, hide, show, duplicate, merge".into(),
+                    description:
+                        "Layer action: add, remove, rename, opacity, hide, show, duplicate, merge"
+                            .into(),
                 },
                 IntentParam {
                     name: "name".into(),
@@ -151,7 +154,8 @@ pub fn list_intents() -> Vec<AgnosIntent> {
         },
         AgnosIntent {
             name: "rasa.ai".into(),
-            description: "Apply AI operations: inpaint, upscale, remove background, generate".into(),
+            description: "Apply AI operations: inpaint, upscale, remove background, generate"
+                .into(),
             utterances: vec![
                 "remove the background".into(),
                 "upscale this image".into(),
@@ -166,7 +170,8 @@ pub fn list_intents() -> Vec<AgnosIntent> {
                     name: "operation".into(),
                     param_type: "string".into(),
                     required: true,
-                    description: "AI operation: inpaint, upscale, remove_background, generate, select".into(),
+                    description:
+                        "AI operation: inpaint, upscale, remove_background, generate, select".into(),
                 },
                 IntentParam {
                     name: "prompt".into(),
@@ -222,14 +227,22 @@ mod tests {
     #[test]
     fn intents_have_utterances() {
         for intent in list_intents() {
-            assert!(!intent.utterances.is_empty(), "{} has no utterances", intent.name);
+            assert!(
+                !intent.utterances.is_empty(),
+                "{} has no utterances",
+                intent.name
+            );
         }
     }
 
     #[test]
     fn intents_have_parameters() {
         for intent in list_intents() {
-            assert!(!intent.parameters.is_empty(), "{} has no params", intent.name);
+            assert!(
+                !intent.parameters.is_empty(),
+                "{} has no params",
+                intent.name
+            );
         }
     }
 

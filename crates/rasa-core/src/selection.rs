@@ -167,11 +167,7 @@ impl Selection {
             SelectionOp::Add | SelectionOp::Subtract | SelectionOp::Intersect => {
                 let a = self.to_mask(width, height);
                 let b = other.to_mask(width, height);
-                if let (
-                    Self::Mask { data: da, .. },
-                    Self::Mask { data: db, .. },
-                ) = (&a, &b)
-                {
+                if let (Self::Mask { data: da, .. }, Self::Mask { data: db, .. }) = (&a, &b) {
                     let data = da
                         .iter()
                         .zip(db.iter())
@@ -379,10 +375,16 @@ mod tests {
     #[test]
     fn combine_replace() {
         let a = Selection::Rect(Rect {
-            x: 0.0, y: 0.0, width: 5.0, height: 5.0,
+            x: 0.0,
+            y: 0.0,
+            width: 5.0,
+            height: 5.0,
         });
         let b = Selection::Rect(Rect {
-            x: 3.0, y: 3.0, width: 5.0, height: 5.0,
+            x: 3.0,
+            y: 3.0,
+            width: 5.0,
+            height: 5.0,
         });
         let result = a.combine(&b, SelectionOp::Replace, 10, 10);
         // Replace should just return b
@@ -393,10 +395,16 @@ mod tests {
     #[test]
     fn combine_add() {
         let a = Selection::Rect(Rect {
-            x: 0.0, y: 0.0, width: 5.0, height: 5.0,
+            x: 0.0,
+            y: 0.0,
+            width: 5.0,
+            height: 5.0,
         });
         let b = Selection::Rect(Rect {
-            x: 3.0, y: 3.0, width: 5.0, height: 5.0,
+            x: 3.0,
+            y: 3.0,
+            width: 5.0,
+            height: 5.0,
         });
         let result = a.combine(&b, SelectionOp::Add, 10, 10);
         // Both regions should be selected
@@ -409,10 +417,16 @@ mod tests {
     #[test]
     fn combine_subtract() {
         let a = Selection::Rect(Rect {
-            x: 0.0, y: 0.0, width: 8.0, height: 8.0,
+            x: 0.0,
+            y: 0.0,
+            width: 8.0,
+            height: 8.0,
         });
         let b = Selection::Rect(Rect {
-            x: 4.0, y: 0.0, width: 8.0, height: 8.0,
+            x: 4.0,
+            y: 0.0,
+            width: 8.0,
+            height: 8.0,
         });
         let result = a.combine(&b, SelectionOp::Subtract, 10, 10);
         // Left part of A should remain
@@ -424,10 +438,16 @@ mod tests {
     #[test]
     fn combine_intersect() {
         let a = Selection::Rect(Rect {
-            x: 0.0, y: 0.0, width: 6.0, height: 6.0,
+            x: 0.0,
+            y: 0.0,
+            width: 6.0,
+            height: 6.0,
         });
         let b = Selection::Rect(Rect {
-            x: 3.0, y: 3.0, width: 6.0, height: 6.0,
+            x: 3.0,
+            y: 3.0,
+            width: 6.0,
+            height: 6.0,
         });
         let result = a.combine(&b, SelectionOp::Intersect, 10, 10);
         // Only the overlap should be selected
@@ -442,7 +462,10 @@ mod tests {
     fn combine_add_with_none() {
         let a = Selection::None;
         let b = Selection::Rect(Rect {
-            x: 2.0, y: 2.0, width: 4.0, height: 4.0,
+            x: 2.0,
+            y: 2.0,
+            width: 4.0,
+            height: 4.0,
         });
         // None = everything selected, so add should be everything
         let result = a.combine(&b, SelectionOp::Add, 8, 8);
@@ -467,7 +490,10 @@ mod tests {
     #[test]
     fn ellipse_zero_radius_contains_nothing() {
         let sel = Selection::Ellipse(Rect {
-            x: 5.0, y: 5.0, width: 0.0, height: 0.0,
+            x: 5.0,
+            y: 5.0,
+            width: 0.0,
+            height: 0.0,
         });
         assert!(!sel.contains(Point { x: 5.0, y: 5.0 }));
     }
@@ -500,10 +526,7 @@ mod tests {
             width: 4,
             height: 4,
             data: vec![
-                0.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 1.0, 0.0,
-                0.0, 1.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             ],
         };
         let b = sel.bounds().unwrap();
@@ -538,7 +561,10 @@ mod tests {
     #[test]
     fn invert_rect_via_mask() {
         let sel = Selection::Rect(Rect {
-            x: 1.0, y: 1.0, width: 2.0, height: 2.0,
+            x: 1.0,
+            y: 1.0,
+            width: 2.0,
+            height: 2.0,
         });
         let inverted = sel.invert(4, 4);
         if let Selection::Mask { data, .. } = &inverted {
@@ -554,7 +580,10 @@ mod tests {
     #[test]
     fn to_mask_ellipse() {
         let sel = Selection::Ellipse(Rect {
-            x: 0.0, y: 0.0, width: 4.0, height: 4.0,
+            x: 0.0,
+            y: 0.0,
+            width: 4.0,
+            height: 4.0,
         });
         let mask = sel.to_mask(4, 4);
         if let Selection::Mask { data, .. } = &mask {
@@ -578,7 +607,9 @@ mod tests {
     #[test]
     fn to_mask_returns_self_for_mask() {
         let sel = Selection::Mask {
-            width: 2, height: 2, data: vec![0.5, 0.5, 0.5, 0.5],
+            width: 2,
+            height: 2,
+            data: vec![0.5, 0.5, 0.5, 0.5],
         };
         let mask = sel.to_mask(2, 2);
         if let Selection::Mask { data, .. } = &mask {

@@ -39,8 +39,7 @@ pub fn canvas_viewport(
         });
     }
 
-    let (response, painter) =
-        ui.allocate_painter(available, egui::Sense::click_and_drag());
+    let (response, painter) = ui.allocate_painter(available, egui::Sense::click_and_drag());
     let rect = response.rect;
 
     // Handle pan (middle-click drag or space+drag)
@@ -71,11 +70,22 @@ pub fn canvas_viewport(
     draw_checkerboard(&painter, canvas_rect, state.zoom);
 
     // Document border
-    painter.rect_stroke(canvas_rect, 0.0, egui::Stroke::new(1.0, egui::Color32::from_gray(100)), egui::StrokeKind::Outside);
+    painter.rect_stroke(
+        canvas_rect,
+        0.0,
+        egui::Stroke::new(1.0, egui::Color32::from_gray(100)),
+        egui::StrokeKind::Outside,
+    );
 
     // Pixel grid (only at high zoom)
     if show_grid && state.zoom >= 4.0 {
-        draw_pixel_grid(&painter, canvas_rect, doc.size.width, doc.size.height, state.zoom);
+        draw_pixel_grid(
+            &painter,
+            canvas_rect,
+            doc.size.width,
+            doc.size.height,
+            state.zoom,
+        );
     }
 }
 
@@ -95,32 +105,30 @@ fn draw_checkerboard(painter: &egui::Painter, rect: egui::Rect, zoom: f32) {
             if (row + col) % 2 == 1 {
                 let x = rect.min.x + col as f32 * check_size;
                 let y = rect.min.y + row as f32 * check_size;
-                let check = egui::Rect::from_min_size(
-                    egui::Pos2::new(x, y),
-                    egui::Vec2::splat(check_size),
-                )
-                .intersect(rect);
+                let check =
+                    egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::splat(check_size))
+                        .intersect(rect);
                 painter.rect_filled(check, 0.0, dark);
             }
         }
     }
 }
 
-fn draw_pixel_grid(
-    painter: &egui::Painter,
-    rect: egui::Rect,
-    width: u32,
-    height: u32,
-    zoom: f32,
-) {
-    let stroke = egui::Stroke::new(0.5, egui::Color32::from_rgba_premultiplied(100, 100, 100, 60));
+fn draw_pixel_grid(painter: &egui::Painter, rect: egui::Rect, width: u32, height: u32, zoom: f32) {
+    let stroke = egui::Stroke::new(
+        0.5,
+        egui::Color32::from_rgba_premultiplied(100, 100, 100, 60),
+    );
 
     // Vertical lines
     for x in 0..=width {
         let px = rect.min.x + x as f32 * zoom;
         if px >= rect.min.x && px <= rect.max.x {
             painter.line_segment(
-                [egui::Pos2::new(px, rect.min.y), egui::Pos2::new(px, rect.max.y)],
+                [
+                    egui::Pos2::new(px, rect.min.y),
+                    egui::Pos2::new(px, rect.max.y),
+                ],
                 stroke,
             );
         }
@@ -131,7 +139,10 @@ fn draw_pixel_grid(
         let py = rect.min.y + y as f32 * zoom;
         if py >= rect.min.y && py <= rect.max.y {
             painter.line_segment(
-                [egui::Pos2::new(rect.min.x, py), egui::Pos2::new(rect.max.x, py)],
+                [
+                    egui::Pos2::new(rect.min.x, py),
+                    egui::Pos2::new(rect.max.x, py),
+                ],
                 stroke,
             );
         }

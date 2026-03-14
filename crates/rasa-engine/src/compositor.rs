@@ -19,13 +19,7 @@ pub fn composite(doc: &Document) -> PixelBuffer {
 }
 
 /// Recursively composite a layer (handles groups with nested children).
-fn composite_layer_tree(
-    dst: &mut PixelBuffer,
-    layer: &Layer,
-    doc: &Document,
-    w: u32,
-    h: u32,
-) {
+fn composite_layer_tree(dst: &mut PixelBuffer, layer: &Layer, doc: &Document, w: u32, h: u32) {
     if !layer.visible || layer.opacity <= 0.0 {
         return;
     }
@@ -53,12 +47,7 @@ fn composite_layer_tree(
 }
 
 /// Composite a single layer buffer onto a destination buffer.
-pub fn composite_layer(
-    dst: &mut PixelBuffer,
-    src: &PixelBuffer,
-    mode: BlendMode,
-    opacity: f32,
-) {
+pub fn composite_layer(dst: &mut PixelBuffer, src: &PixelBuffer, mode: BlendMode, opacity: f32) {
     let w = dst.width.min(src.width) as usize;
     let h = dst.height.min(src.height) as usize;
     let dst_w = dst.width as usize;

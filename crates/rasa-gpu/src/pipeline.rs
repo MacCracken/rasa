@@ -74,26 +74,24 @@ pub fn dispatch_pixel_shader(
                 ],
             });
 
-    let pipeline_layout =
-        device
-            .device()
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
-            });
+    let pipeline_layout = device
+        .device()
+        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
 
-    let pipeline =
-        device
-            .device()
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("pixel_compute"),
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: Some("main"),
-                compilation_options: Default::default(),
-                cache: None,
-            });
+    let pipeline = device
+        .device()
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("pixel_compute"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
 
     let bind_group = device
         .device()
@@ -166,25 +164,16 @@ pub fn dispatch_composite_shader(
         .flat_map(|c| [c.r, c.g, c.b, c.a])
         .collect();
 
-    let src_buffer = device.create_buffer_from_pixels(
-        &src_flat,
-        wgpu::BufferUsages::STORAGE,
-    );
+    let src_buffer = device.create_buffer_from_pixels(&src_flat, wgpu::BufferUsages::STORAGE);
     let dst_buffer = device.create_buffer_from_pixels(
         &dst_flat,
         wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
     );
 
     // Params: width, height, opacity, padding
-    let params: [u32; 4] = [
-        width,
-        height,
-        opacity.to_bits(),
-        0,
-    ];
-    let params_bytes: &[u8] = unsafe {
-        std::slice::from_raw_parts(params.as_ptr() as *const u8, 16)
-    };
+    let params: [u32; 4] = [width, height, opacity.to_bits(), 0];
+    let params_bytes: &[u8] =
+        unsafe { std::slice::from_raw_parts(params.as_ptr() as *const u8, 16) };
 
     let params_buffer = device.device().create_buffer(&wgpu::BufferDescriptor {
         label: Some("composite_params"),
@@ -240,26 +229,24 @@ pub fn dispatch_composite_shader(
                 ],
             });
 
-    let pipeline_layout =
-        device
-            .device()
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
-            });
+    let pipeline_layout = device
+        .device()
+        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
 
-    let pipeline =
-        device
-            .device()
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("composite_compute"),
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: Some("main"),
-                compilation_options: Default::default(),
-                cache: None,
-            });
+    let pipeline = device
+        .device()
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("composite_compute"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
 
     let bind_group = device
         .device()

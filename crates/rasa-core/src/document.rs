@@ -244,9 +244,7 @@ impl Document {
             .layer_index(upper_id)
             .ok_or(RasaError::LayerNotFound(upper_id))?;
         if upper_idx == 0 {
-            return Err(RasaError::Other(
-                "cannot merge down: no layer below".into(),
-            ));
+            return Err(RasaError::Other("cannot merge down: no layer below".into()));
         }
         let lower_idx = upper_idx - 1;
 
@@ -259,7 +257,7 @@ impl Document {
             _ => {
                 return Err(RasaError::Other(
                     "cannot merge: lower layer is not raster".into(),
-                ))
+                ));
             }
         };
 

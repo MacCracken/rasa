@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use image::{ImageBuffer, Rgba};
 use image::codecs::jpeg::JpegEncoder;
+use image::{ImageBuffer, Rgba};
 use rasa_core::color::linear_to_srgb;
 use rasa_core::error::RasaError;
 use rasa_core::pixel::PixelBuffer;
@@ -21,10 +21,8 @@ pub fn export_buffer(
             let rgb_img = image::DynamicImage::ImageRgba8(img).to_rgb8();
             let file = std::fs::File::create(path)
                 .map_err(|e| RasaError::Other(format!("export failed: {e}")))?;
-            let mut encoder = JpegEncoder::new_with_quality(
-                std::io::BufWriter::new(file),
-                quality.0,
-            );
+            let mut encoder =
+                JpegEncoder::new_with_quality(std::io::BufWriter::new(file), quality.0);
             encoder
                 .encode_image(&rgb_img)
                 .map_err(|e| RasaError::Other(format!("JPEG encode failed: {e}")))?;

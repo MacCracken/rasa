@@ -89,7 +89,13 @@ mod tests {
         assert_eq!(layer.bounds.height, 600.0);
         assert_eq!(layer.bounds.x, 0.0);
         assert_eq!(layer.bounds.y, 0.0);
-        assert!(matches!(layer.kind, LayerKind::Raster { width: 800, height: 600 }));
+        assert!(matches!(
+            layer.kind,
+            LayerKind::Raster {
+                width: 800,
+                height: 600
+            }
+        ));
     }
 
     #[test]
@@ -146,7 +152,11 @@ mod tests {
             brightness: 0.5,
             contrast: -0.2,
         };
-        if let Adjustment::BrightnessContrast { brightness, contrast } = adj {
+        if let Adjustment::BrightnessContrast {
+            brightness,
+            contrast,
+        } = adj
+        {
             assert_eq!(brightness, 0.5);
             assert_eq!(contrast, -0.2);
         }
@@ -159,7 +169,12 @@ mod tests {
             saturation: 0.8,
             lightness: -0.1,
         };
-        if let Adjustment::HueSaturation { hue, saturation, lightness } = adj {
+        if let Adjustment::HueSaturation {
+            hue,
+            saturation,
+            lightness,
+        } = adj
+        {
             assert_eq!(hue, 180.0);
             assert_eq!(saturation, 0.8);
             assert_eq!(lightness, -0.1);
@@ -184,7 +199,12 @@ mod tests {
             white: 1.0,
             gamma: 1.0,
         };
-        if let Adjustment::Levels { black, white, gamma } = adj {
+        if let Adjustment::Levels {
+            black,
+            white,
+            gamma,
+        } = adj
+        {
             assert_eq!(black, 0.0);
             assert_eq!(white, 1.0);
             assert_eq!(gamma, 1.0);

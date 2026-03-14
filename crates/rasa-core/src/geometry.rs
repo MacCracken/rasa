@@ -129,9 +129,9 @@ mod tests {
             width: 20.0,
             height: 20.0,
         };
-        assert!(!r.contains(Point { x: 5.0, y: 15.0 }));  // left
+        assert!(!r.contains(Point { x: 5.0, y: 15.0 })); // left
         assert!(!r.contains(Point { x: 35.0, y: 15.0 })); // right
-        assert!(!r.contains(Point { x: 15.0, y: 5.0 }));  // above
+        assert!(!r.contains(Point { x: 15.0, y: 5.0 })); // above
         assert!(!r.contains(Point { x: 15.0, y: 35.0 })); // below
     }
 

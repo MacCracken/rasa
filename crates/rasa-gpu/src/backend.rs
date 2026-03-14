@@ -51,7 +51,8 @@ impl RenderBackend for CpuBackend {
             let dr = y * dst_w;
             let sr = y * src_w;
             for x in 0..w {
-                dst_pixels[dr + x] = rasa_core::blend::blend(dst_pixels[dr + x], src_pixels[sr + x], mode, opacity);
+                dst_pixels[dr + x] =
+                    rasa_core::blend::blend(dst_pixels[dr + x], src_pixels[sr + x], mode, opacity);
             }
         }
     }
@@ -162,15 +163,9 @@ impl RenderBackend for GpuBackend {
         let factor = (1.0 + contrast) / (1.0 - contrast.min(0.9999));
         let pixel_count = (buf.width * buf.height) as u32;
         // Params: count, brightness, contrast_factor, padding
-        let params: [u32; 4] = [
-            pixel_count,
-            brightness.to_bits(),
-            factor.to_bits(),
-            0,
-        ];
-        let params_bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(params.as_ptr() as *const u8, 16)
-        };
+        let params: [u32; 4] = [pixel_count, brightness.to_bits(), factor.to_bits(), 0];
+        let params_bytes: &[u8] =
+            unsafe { std::slice::from_raw_parts(params.as_ptr() as *const u8, 16) };
         super::pipeline::dispatch_pixel_shader(
             &self.device,
             buf,
@@ -182,9 +177,8 @@ impl RenderBackend for GpuBackend {
     fn invert(&self, buf: &mut PixelBuffer) {
         let pixel_count = (buf.width * buf.height) as u32;
         let params: [u32; 4] = [pixel_count, 0, 0, 0];
-        let params_bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(params.as_ptr() as *const u8, 16)
-        };
+        let params_bytes: &[u8] =
+            unsafe { std::slice::from_raw_parts(params.as_ptr() as *const u8, 16) };
         super::pipeline::dispatch_pixel_shader(
             &self.device,
             buf,
@@ -196,9 +190,8 @@ impl RenderBackend for GpuBackend {
     fn grayscale(&self, buf: &mut PixelBuffer) {
         let pixel_count = (buf.width * buf.height) as u32;
         let params: [u32; 4] = [pixel_count, 0, 0, 0];
-        let params_bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(params.as_ptr() as *const u8, 16)
-        };
+        let params_bytes: &[u8] =
+            unsafe { std::slice::from_raw_parts(params.as_ptr() as *const u8, 16) };
         super::pipeline::dispatch_pixel_shader(
             &self.device,
             buf,

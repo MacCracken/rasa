@@ -1,7 +1,7 @@
 use egui;
+use rasa_core::Document;
 use rasa_core::color::BlendMode;
 use rasa_core::layer::Layer;
-use rasa_core::Document;
 
 use crate::tools::ActiveTool;
 

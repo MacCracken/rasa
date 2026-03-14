@@ -202,8 +202,14 @@ mod tests {
 
     #[test]
     fn detect_bmp_gif() {
-        assert_eq!(ImageFormat::from_path(Path::new("img.bmp")), Some(ImageFormat::Bmp));
-        assert_eq!(ImageFormat::from_path(Path::new("anim.gif")), Some(ImageFormat::Gif));
+        assert_eq!(
+            ImageFormat::from_path(Path::new("img.bmp")),
+            Some(ImageFormat::Bmp)
+        );
+        assert_eq!(
+            ImageFormat::from_path(Path::new("anim.gif")),
+            Some(ImageFormat::Gif)
+        );
     }
 
     #[test]

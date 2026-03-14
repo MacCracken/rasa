@@ -21,7 +21,10 @@ impl SessionState {
     pub fn create_document(&self, name: &str, width: u32, height: u32) -> Uuid {
         let doc = Document::new(name, width, height);
         let id = doc.id;
-        self.documents.lock().unwrap_or_else(|e| e.into_inner()).insert(id, doc);
+        self.documents
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, doc);
         id
     }
 
@@ -29,7 +32,10 @@ impl SessionState {
     pub fn open_image(&self, path: &PathBuf) -> Result<Uuid, rasa_core::error::RasaError> {
         let doc = rasa_storage::import::import_image(path)?;
         let id = doc.id;
-        self.documents.lock().unwrap_or_else(|e| e.into_inner()).insert(id, doc);
+        self.documents
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, doc);
         Ok(id)
     }
 
@@ -73,7 +79,11 @@ impl SessionState {
 
     /// Close a document.
     pub fn close_document(&self, id: Uuid) -> bool {
-        self.documents.lock().unwrap_or_else(|e| e.into_inner()).remove(&id).is_some()
+        self.documents
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&id)
+            .is_some()
     }
 }
 

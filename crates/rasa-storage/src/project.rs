@@ -89,7 +89,9 @@ pub fn load(path: &Path) -> Result<Document, RasaError> {
     let mut magic = [0u8; 4];
     reader.read_exact(&mut magic)?;
     if &magic != MAGIC {
-        return Err(RasaError::CorruptFile("not a .rasa file (bad magic)".into()));
+        return Err(RasaError::CorruptFile(
+            "not a .rasa file (bad magic)".into(),
+        ));
     }
 
     // Read header length with size validation
