@@ -407,7 +407,8 @@ fn tool_export(state: &SessionState, args: &Value) -> Result<Value, String> {
 
     // Validate parent directory exists
     if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty() && !parent.is_dir()
+        && !parent.as_os_str().is_empty()
+        && !parent.is_dir()
     {
         return Err(format!("directory does not exist: {}", parent.display()));
     }
@@ -431,8 +432,7 @@ fn tool_export(state: &SessionState, args: &Value) -> Result<Value, String> {
             rasa_storage::export::export_buffer(&composited, &path, &settings)
                 .map_err(|e| e.to_string())
         })
-        .map_err(|e| e.to_string())?
-        ?;
+        .map_err(|e| e.to_string())??;
 
     Ok(json!({
         "exported": true,

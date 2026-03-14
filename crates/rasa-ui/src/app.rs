@@ -68,16 +68,11 @@ impl RasaApp {
                         let composited = rasa_engine::compositor::composite(doc);
                         let format = rasa_storage::format::ImageFormat::from_path(&path);
                         if let Some(fmt) = format {
-                            let settings =
-                                rasa_storage::format::ExportSettings::for_format(fmt);
-                            match rasa_storage::export::export_buffer(
-                                &composited,
-                                &path,
-                                &settings,
-                            ) {
+                            let settings = rasa_storage::format::ExportSettings::for_format(fmt);
+                            match rasa_storage::export::export_buffer(&composited, &path, &settings)
+                            {
                                 Ok(()) => {
-                                    self.status_message =
-                                        format!("Exported: {}", path.display());
+                                    self.status_message = format!("Exported: {}", path.display());
                                 }
                                 Err(e) => {
                                     self.status_message = format!("Export error: {e}");
@@ -183,13 +178,17 @@ impl RasaApp {
 
         ctx.input(|i| {
             // Ctrl+Z = Undo
-            if modifiers.ctrl && i.key_pressed(egui::Key::Z) && !modifiers.shift
+            if modifiers.ctrl
+                && i.key_pressed(egui::Key::Z)
+                && !modifiers.shift
                 && let Some(doc) = &mut self.document
             {
                 let _ = doc.undo();
             }
             // Ctrl+Shift+Z = Redo
-            if modifiers.ctrl && modifiers.shift && i.key_pressed(egui::Key::Z)
+            if modifiers.ctrl
+                && modifiers.shift
+                && i.key_pressed(egui::Key::Z)
                 && let Some(doc) = &mut self.document
             {
                 let _ = doc.redo();
