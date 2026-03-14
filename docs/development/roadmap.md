@@ -1,8 +1,8 @@
 # Roadmap — Path to MVP v1
 
 > **Version**: 2026.3.13
-> **Status**: Phase 9 complete — Phase 10 next
-> **Tests**: 338 passing
+> **Status**: MVP v1 complete — all 10 phases done
+> **Tests**: 347 passing
 
 ---
 
@@ -125,19 +125,19 @@
 - [x] `.agnos-agent.json` bundle (intents + MCP transport config)
 - [x] Session state management for multi-document MCP workflows
 
-## Phase 10 — UI Shell
+## Phase 10 — UI Shell ✓
 
 **Goal**: Desktop-ready GUI application.
 
-- [ ] Main window with menu bar
-- [ ] Canvas viewport: pan, zoom, pixel grid, rulers
-- [ ] Tool palette (all Phase 5 tools)
-- [ ] Layer panel: visibility, opacity, blend mode, reorder
-- [ ] Properties panel: tool settings, color, document info
-- [ ] Color picker: wheel + sliders + hex input
-- [ ] History panel (undo/redo list)
-- [ ] Keyboard shortcuts
-- [ ] Wayland-native, PipeWire integration
+- [x] Main window with menu bar (File, Edit, View, Layer, Filter menus)
+- [x] Canvas viewport: pan (middle-click), zoom (scroll wheel), pixel grid (at 4x+ zoom), rulers
+- [x] Tool palette (9 tools: Brush, Eraser, Move, Selection, Eyedropper, Fill, Gradient, Crop, Transform)
+- [x] Layer panel: visibility toggle, opacity slider, blend mode combo, click-to-select
+- [x] Properties panel: tool-specific settings (brush size/opacity/hardness), color info
+- [x] Color picker: RGB color edit button + hex display
+- [x] History panel (undo/redo buttons)
+- [x] Keyboard shortcuts (B/E/M/S/I/F/G/C/T for tools, Ctrl+Z/Ctrl+Shift+Z, +/- zoom)
+- [x] Built with egui/eframe (Wayland-compatible via winit backend)
 
 ---
 

@@ -51,3 +51,11 @@ All notable changes to Rasa will be documented in this file.
 - **rasa-mcp**: 5 agnoshi voice intents: rasa.open, rasa.filter, rasa.layer, rasa.export, rasa.ai
 - **rasa-mcp**: `.agnos-agent.json` bundle for AGNOS platform integration
 - **rasa-mcp**: Session state management for multi-document workflows
+- **rasa-ui**: Desktop GUI application using egui/eframe
+- **rasa-ui**: Main window with menu bar (File/Edit/View/Layer/Filter), status bar with zoom/dimensions
+- **rasa-ui**: Canvas viewport with pan (middle-click drag), zoom (scroll wheel), pixel grid, checkerboard transparency
+- **rasa-ui**: Tool palette with 9 tools: Brush, Eraser, Move, Selection, Eyedropper, Fill, Gradient, Crop, Transform
+- **rasa-ui**: Layer panel with visibility toggle, opacity slider, blend mode selector, click-to-select
+- **rasa-ui**: Properties panel with tool-specific settings (brush size/opacity/hardness) and color picker
+- **rasa-ui**: History panel with undo/redo buttons
+- **rasa-ui**: Keyboard shortcuts: B/E/M/S/I/F/G/C/T for tools, Ctrl+Z undo, Ctrl+Shift+Z redo, +/- zoom

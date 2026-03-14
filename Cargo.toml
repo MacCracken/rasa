@@ -52,6 +52,10 @@ image = "0.25"
 wgpu = "24"
 ash = "0.38"
 
+# GUI
+eframe = "0.31"
+egui = "0.31"
+
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }

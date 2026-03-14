@@ -11,6 +11,9 @@ rasa-core = { workspace = true }
 rasa-engine = { workspace = true }
 rasa-storage = { workspace = true }
 rasa-ai = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
+uuid = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
