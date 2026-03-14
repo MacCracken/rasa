@@ -8,7 +8,11 @@ pub enum Selection {
     None,
     Rect(Rect),
     Ellipse(Rect),
-    Freeform { points: Vec<Point> },
-    Mask { width: u32, height: u32 },
+    Freeform {
+        points: Vec<Point>,
+    },
+    Mask {
+        width: u32,
+        height: u32,
+    },
 }
-

@@ -68,4 +68,3 @@ pub enum BlendMode {
     Difference,
     Exclusion,
 }
-
