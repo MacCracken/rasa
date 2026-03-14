@@ -1,0 +1,67 @@
+{
+  "name": "rasa",
+  "version": "2026.3.13",
+  "description": "AI-powered image editor with voice control via AGNOS",
+  "intents": [
+    {
+      "name": "rasa.open",
+      "description": "Open an image or create a new canvas",
+      "utterances": [
+        "open {file}",
+        "create a new {width} by {height} canvas",
+        "new image {width} by {height}",
+        "open image {file}",
+        "load {file}"
+      ]
+    },
+    {
+      "name": "rasa.filter",
+      "description": "Apply a filter or adjustment to the current layer",
+      "utterances": [
+        "apply {filter}",
+        "blur this layer",
+        "sharpen the image",
+        "invert the colors",
+        "make it grayscale",
+        "increase brightness by {amount}"
+      ]
+    },
+    {
+      "name": "rasa.layer",
+      "description": "Manage layers: add, remove, rename, adjust",
+      "utterances": [
+        "add a new layer",
+        "delete this layer",
+        "rename layer to {name}",
+        "set opacity to {opacity}",
+        "duplicate this layer",
+        "merge down"
+      ]
+    },
+    {
+      "name": "rasa.export",
+      "description": "Export or save the current document",
+      "utterances": [
+        "export as {format}",
+        "save as {file}",
+        "export as PNG",
+        "save as JPEG"
+      ]
+    },
+    {
+      "name": "rasa.ai",
+      "description": "Apply AI operations: inpaint, upscale, remove background, generate",
+      "utterances": [
+        "remove the background",
+        "upscale this image",
+        "inpaint the selection",
+        "generate an image of {prompt}",
+        "AI select the subject"
+      ]
+    }
+  ],
+  "mcp": {
+    "transport": "stdio",
+    "command": "rasa-mcp"
+  }
+}

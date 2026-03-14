@@ -8,5 +8,14 @@
 //   5. rasa_export       — Export to image file (PNG, JPEG, WebP, TIFF)
 
 fn main() {
-    println!("rasa-mcp: not yet implemented");
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::level_filters::LevelFilter::INFO.into()),
+        )
+        .init();
+
+    tracing::info!("rasa-mcp server starting (stdio transport)");
+    rasa_mcp::server::run_stdio();
 }

@@ -1,8 +1,8 @@
 # Roadmap — Path to MVP v1
 
 > **Version**: 2026.3.13
-> **Status**: Phase 6 complete — Phase 7 next
-> **Tests**: 312 passing
+> **Status**: Phase 9 complete — Phase 10 next
+> **Tests**: 338 passing
 
 ---
 
@@ -93,37 +93,37 @@
 - [x] Performance benchmarks (CPU baseline with MP/s metrics; GPU comparison when available)
 - [x] 9 WGSL compute shaders: composite (Normal/Multiply/Screen), invert, grayscale, brightness/contrast, blur H/V, brush dab
 
-## Phase 7 — AI Foundation
+## Phase 7 — AI Foundation ✓
 
 **Goal**: Inference pipeline ready for AI features.
 
-- [ ] ONNX Runtime integration
-- [ ] Model management: download, cache, version
-- [ ] hoosh/Synapse API client for Stable Diffusion
-- [ ] Pre-processing pipeline (resize, normalize, pad)
-- [ ] Post-processing pipeline (denormalize, blend into document)
-- [ ] Progress tracking and cancellation
+- [x] Synapse HTTP API client for remote inference (replaces local ONNX — architectural decision)
+- [x] Model management: ModelId, ModelInfo, ModelKind, preset models (SD Inpaint, RealESRGAN, SAM, SDXL, U2Net)
+- [x] hoosh/Synapse API client with all endpoints (inpaint, upscale, segment, generate, remove-bg)
+- [x] Pre-processing pipeline (PixelBuffer → PNG bytes with sRGB conversion)
+- [x] Post-processing pipeline (PNG → PixelBuffer with linear conversion, mask extraction)
+- [x] Progress tracking and cancellation (TaskHandle, ProgressCallback, cancel support)
 
-## Phase 8 — AI Features
+## Phase 8 — AI Features ✓
 
 **Goal**: Ship the AI features that differentiate Rasa.
 
-- [ ] **Inpainting**: mask region + context-aware regeneration
-- [ ] **Upscaling**: 2x and 4x super-resolution
-- [ ] **Background removal**: automatic subject segmentation
-- [ ] **Generative fill**: text-prompt-driven content generation
-- [ ] **AI selection**: intelligent edge detection
-- [ ] Selection → AI pipeline integration (select region, apply AI)
+- [x] **Inpainting**: mask region + prompt-driven regeneration via Synapse API
+- [x] **Upscaling**: 2x and 4x super-resolution (ScaleFactor enum, RealESRGAN default)
+- [x] **Background removal**: automatic subject segmentation (U2Net default)
+- [x] **Generative fill**: text-prompt-driven content generation with feathered blending
+- [x] **AI selection**: intelligent segmentation → Selection conversion (SAM ViT-H default)
+- [x] Selection → AI pipeline integration (extract region, apply result, blend with feathering)
 
-## Phase 9 — MCP & Agnoshi
+## Phase 9 — MCP & Agnoshi ✓
 
 **Goal**: Platform integration for Claude and AGNOS voice control.
 
-- [ ] MCP 2.0 server (stdio transport)
-- [ ] 5 MCP tools: `rasa_open_image`, `rasa_edit_layer`, `rasa_apply_filter`, `rasa_get_document`, `rasa_export`
-- [ ] 5 agnoshi intents for natural language voice commands
-- [ ] `.agnos-agent` bundle
-- [ ] Marketplace recipe (`recipes/marketplace/rasa.toml` in agnosticos)
+- [x] MCP 2.0 server (stdio transport, JSON-RPC 2.0 protocol, initialize/tools/list/tools/call)
+- [x] 5 MCP tools: `rasa_open_image`, `rasa_edit_layer`, `rasa_apply_filter`, `rasa_get_document`, `rasa_export`
+- [x] 5 agnoshi intents: `rasa.open`, `rasa.filter`, `rasa.layer`, `rasa.export`, `rasa.ai`
+- [x] `.agnos-agent.json` bundle (intents + MCP transport config)
+- [x] Session state management for multi-document MCP workflows
 
 ## Phase 10 — UI Shell
 

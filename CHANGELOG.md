@@ -43,3 +43,11 @@ All notable changes to Rasa will be documented in this file.
 - **rasa-gpu**: 9 WGSL compute shaders: composite (Normal/Multiply/Screen), invert, grayscale, brightness/contrast, blur H/V, brush dab
 - **rasa-gpu**: GpuBackend wired to actual compute dispatch for compositing and per-pixel filters
 - **rasa-gpu**: Performance benchmark framework with CPU baseline and GPU comparison
+- **rasa-ai**: AI inference pipeline via hoosh/Synapse HTTP API (inpaint, upscale, segment, generate, remove-bg)
+- **rasa-ai**: Model management with presets (SD Inpaint, RealESRGAN, SAM ViT-H, SDXL, U2Net)
+- **rasa-ai**: Document integration: apply AI results as layers, within selections, with feathered blending
+- **rasa-mcp**: MCP 2.0 server with stdio transport and JSON-RPC 2.0 protocol
+- **rasa-mcp**: 5 MCP tools: rasa_open_image, rasa_edit_layer, rasa_apply_filter, rasa_get_document, rasa_export
+- **rasa-mcp**: 5 agnoshi voice intents: rasa.open, rasa.filter, rasa.layer, rasa.export, rasa.ai
+- **rasa-mcp**: `.agnos-agent.json` bundle for AGNOS platform integration
+- **rasa-mcp**: Session state management for multi-document workflows
