@@ -10,3 +10,11 @@ All notable changes to Rasa will be documented in this file.
 - Project documentation: README, CONTRIBUTING, roadmap
 - CI/CD pipeline configuration
 - Makefile with standard build targets
+- **rasa-core**: Document, Layer, Color, Geometry, Transform, Selection, PixelBuffer types
+- **rasa-core**: Blend mode implementations (12 modes with Porter-Duff alpha compositing)
+- **rasa-core**: Undo/redo command history system
+- **rasa-core**: Error type hierarchy with domain-specific variants (layer, selection, transform, storage, AI, history errors)
+- **rasa-core**: 109 unit tests across all modules (geometry, layer, color, transform, selection, pixel, blend, command, document, error)
+- **rasa-core**: 32 serde round-trip integration tests for all serializable types
+- **rasa-core**: sRGB/linear/HSL color space conversions
+- **rasa-core**: 2D affine transform with composition and inverse

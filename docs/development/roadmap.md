@@ -1,8 +1,8 @@
 # Roadmap — Path to MVP v1
 
 > **Version**: 2026.3.13
-> **Status**: Phase 1 in progress
-> **Tests**: 0 passing
+> **Status**: Phase 1 complete — Phase 2 next
+> **Tests**: 141 passing
 
 ---
 
@@ -23,7 +23,7 @@
 
 ---
 
-## Phase 1 — Foundation
+## Phase 1 — Foundation ✓
 
 **Goal**: Establish workspace structure and zero-I/O core types.
 
@@ -31,9 +31,9 @@
 - [x] `rasa-core`: Document, Layer, Color, Geometry, Transform, Selection types
 - [x] CI pipeline (build, test, lint, audit)
 - [x] Project documentation (README, CONTRIBUTING, roadmap)
-- [ ] Unit tests for core types (target: 90%+ coverage on rasa-core)
-- [ ] Serde round-trip tests for all types
-- [ ] Error type hierarchy
+- [x] Unit tests for core types (109 unit tests across all modules)
+- [x] Serde round-trip tests for all types (32 integration tests)
+- [x] Error type hierarchy (domain-specific variants for layers, selection, transform, storage, AI, history)
 
 ## Phase 2 — Canvas & Layers
 
