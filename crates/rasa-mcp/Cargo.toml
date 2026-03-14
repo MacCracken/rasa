@@ -1,0 +1,23 @@
+[package]
+name = "rasa-mcp"
+description = "MCP 2.0 server exposing 5 tools for Claude integration"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "rasa-mcp"
+path = "src/main.rs"
+
+[dependencies]
+rasa-core = { workspace = true }
+rasa-engine = { workspace = true }
+rasa-storage = { workspace = true }
+rasa-ai = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }

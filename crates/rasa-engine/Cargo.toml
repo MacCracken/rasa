@@ -1,0 +1,13 @@
+[package]
+name = "rasa-engine"
+description = "Rendering pipeline, compositing, filter chain, brush engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+rasa-core = { workspace = true }
+rasa-gpu = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

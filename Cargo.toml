@@ -1,0 +1,67 @@
+[workspace]
+members = [
+    "crates/rasa-core",
+    "crates/rasa-gpu",
+    "crates/rasa-engine",
+    "crates/rasa-storage",
+    "crates/rasa-ai",
+    "crates/rasa-ui",
+    "crates/rasa-mcp",
+]
+resolver = "2"
+
+[workspace.package]
+version = "2026.3.13"
+edition = "2024"
+authors = ["Robert MacCracken <robert@anomaly.co>"]
+license = "AGPL-3.0"
+repository = "https://github.com/agnostos/rasa"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# HTTP (for AI inference API, MCP)
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+reqwest = { version = "0.12", features = ["json"] }
+
+# Database
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+
+# Image processing
+image = "0.25"
+
+# GPU
+wgpu = "24"
+ash = "0.38"
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+bytes = "1"
+sha2 = "0.10"
+
+# Internal crates
+rasa-core = { path = "crates/rasa-core" }
+rasa-gpu = { path = "crates/rasa-gpu" }
+rasa-engine = { path = "crates/rasa-engine" }
+rasa-storage = { path = "crates/rasa-storage" }
+rasa-ai = { path = "crates/rasa-ai" }
+rasa-ui = { path = "crates/rasa-ui" }
+rasa-mcp = { path = "crates/rasa-mcp" }

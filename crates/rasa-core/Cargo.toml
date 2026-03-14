@@ -1,0 +1,12 @@
+[package]
+name = "rasa-core"
+description = "Zero-I/O core types: document model, layers, color, selections, transforms"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }

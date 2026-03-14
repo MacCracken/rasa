@@ -1,0 +1,23 @@
+# Rasa configuration
+
+[canvas]
+# Default canvas size for new documents
+default_width = 1920
+default_height = 1080
+default_dpi = 72
+
+[gpu]
+# Force CPU rendering (disable GPU acceleration)
+force_cpu = false
+
+[ai]
+# hoosh/Synapse endpoint for Stable Diffusion
+synapse_url = "http://localhost:8090"
+# ONNX model cache directory
+model_cache = "~/.local/share/rasa/models"
+
+[storage]
+# Recent files database
+database = "~/.local/share/rasa/rasa.db"
+# Auto-save interval (seconds, 0 to disable)
+autosave_interval = 120

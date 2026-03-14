@@ -1,0 +1,13 @@
+[package]
+name = "rasa-gpu"
+description = "Vulkan compute shaders, GPU-accelerated filters and compositing"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+rasa-core = { workspace = true }
+wgpu = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
