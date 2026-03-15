@@ -5,7 +5,7 @@ use crate::color::BlendMode;
 use crate::command::{Command, History};
 use crate::error::RasaError;
 use crate::geometry::Size;
-use crate::layer::{Layer, LayerKind};
+use crate::layer::{Adjustment, Layer, LayerKind};
 use crate::pixel::PixelBuffer;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -223,6 +223,43 @@ impl Document {
             layer_id: id,
             old_name: old,
             new_name: name,
+        });
+        Ok(())
+    }
+
+    /// Add a non-destructive adjustment layer above the current stack.
+    pub fn add_adjustment_layer(
+        &mut self,
+        name: impl Into<String>,
+        adjustment: Adjustment,
+    ) -> Uuid {
+        let layer = Layer::new_adjustment(name, adjustment, (self.size.width, self.size.height));
+        let id = layer.id;
+        let index = self.layers.len();
+        let cmd = Command::AddLayer {
+            layer: layer.clone(),
+            index,
+        };
+        self.layers.insert(index, layer);
+        self.active_layer = Some(id);
+        self.push_command(cmd);
+        id
+    }
+
+    /// Update the parameters of an existing adjustment layer (non-destructive).
+    pub fn set_adjustment(&mut self, id: Uuid, adjustment: Adjustment) -> Result<(), RasaError> {
+        let layer = self
+            .find_layer_mut(id)
+            .ok_or(RasaError::LayerNotFound(id))?;
+        let old = match &layer.kind {
+            LayerKind::Adjustment(adj) => adj.clone(),
+            _ => return Err(RasaError::NotAnAdjustmentLayer(id)),
+        };
+        layer.kind = LayerKind::Adjustment(adjustment.clone());
+        self.push_command(Command::SetAdjustment {
+            layer_id: id,
+            old_adjustment: old,
+            new_adjustment: adjustment,
         });
         Ok(())
     }
@@ -562,6 +599,15 @@ impl Document {
                 }
                 self.layers.insert(*group_index, *group.clone());
             }
+            Command::SetAdjustment {
+                layer_id,
+                old_adjustment,
+                ..
+            } => {
+                if let Some(l) = self.find_layer_mut(*layer_id) {
+                    l.kind = LayerKind::Adjustment(old_adjustment.clone());
+                }
+            }
         }
     }
 
@@ -677,6 +723,15 @@ impl Document {
                 sorted.sort_by_key(|(_, idx)| *idx);
                 for (layer, idx) in sorted {
                     self.layers.insert(idx, layer);
+                }
+            }
+            Command::SetAdjustment {
+                layer_id,
+                new_adjustment,
+                ..
+            } => {
+                if let Some(l) = self.find_layer_mut(*layer_id) {
+                    l.kind = LayerKind::Adjustment(new_adjustment.clone());
                 }
             }
         }
@@ -1116,5 +1171,160 @@ mod tests {
         assert_eq!(doc.layers.len(), 2);
         doc.remove_layer(lid).unwrap();
         assert_eq!(doc.layers.len(), 1);
+    }
+
+    // ── Adjustment layer tests ──────────────────────────
+
+    #[test]
+    fn add_adjustment_layer() {
+        let mut doc = Document::new("Test", 100, 100);
+        let adj_id = doc.add_adjustment_layer(
+            "Brightness",
+            crate::layer::Adjustment::BrightnessContrast {
+                brightness: 0.2,
+                contrast: 0.0,
+            },
+        );
+        assert_eq!(doc.layers.len(), 2);
+        let layer = doc.find_layer(adj_id).unwrap();
+        assert_eq!(layer.name, "Brightness");
+        assert!(matches!(layer.kind, LayerKind::Adjustment(_)));
+        assert!(doc.get_pixels(adj_id).is_none()); // no pixel data
+    }
+
+    #[test]
+    fn set_adjustment_updates_params() {
+        let mut doc = Document::new("Test", 100, 100);
+        let adj_id = doc.add_adjustment_layer(
+            "BC",
+            crate::layer::Adjustment::BrightnessContrast {
+                brightness: 0.1,
+                contrast: 0.0,
+            },
+        );
+        doc.set_adjustment(
+            adj_id,
+            crate::layer::Adjustment::BrightnessContrast {
+                brightness: 0.5,
+                contrast: 0.3,
+            },
+        )
+        .unwrap();
+        let layer = doc.find_layer(adj_id).unwrap();
+        if let LayerKind::Adjustment(crate::layer::Adjustment::BrightnessContrast {
+            brightness,
+            contrast,
+        }) = &layer.kind
+        {
+            assert_eq!(*brightness, 0.5);
+            assert_eq!(*contrast, 0.3);
+        } else {
+            panic!("expected BrightnessContrast");
+        }
+    }
+
+    #[test]
+    fn set_adjustment_on_raster_errors() {
+        let mut doc = Document::new("Test", 10, 10);
+        let bg_id = doc.layers[0].id;
+        let result = doc.set_adjustment(
+            bg_id,
+            crate::layer::Adjustment::BrightnessContrast {
+                brightness: 0.0,
+                contrast: 0.0,
+            },
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn undo_set_adjustment() {
+        let mut doc = Document::new("Test", 100, 100);
+        let adj_id = doc.add_adjustment_layer(
+            "Levels",
+            crate::layer::Adjustment::Levels {
+                black: 0.0,
+                white: 1.0,
+                gamma: 1.0,
+            },
+        );
+        doc.set_adjustment(
+            adj_id,
+            crate::layer::Adjustment::Levels {
+                black: 0.1,
+                white: 0.9,
+                gamma: 2.0,
+            },
+        )
+        .unwrap();
+        doc.undo().unwrap();
+        let layer = doc.find_layer(adj_id).unwrap();
+        if let LayerKind::Adjustment(crate::layer::Adjustment::Levels { gamma, .. }) = &layer.kind {
+            assert_eq!(*gamma, 1.0);
+        } else {
+            panic!("expected Levels after undo");
+        }
+    }
+
+    #[test]
+    fn redo_set_adjustment() {
+        let mut doc = Document::new("Test", 100, 100);
+        let adj_id = doc.add_adjustment_layer(
+            "Levels",
+            crate::layer::Adjustment::Levels {
+                black: 0.0,
+                white: 1.0,
+                gamma: 1.0,
+            },
+        );
+        doc.set_adjustment(
+            adj_id,
+            crate::layer::Adjustment::Levels {
+                black: 0.1,
+                white: 0.9,
+                gamma: 2.0,
+            },
+        )
+        .unwrap();
+        doc.undo().unwrap();
+        doc.redo().unwrap();
+        let layer = doc.find_layer(adj_id).unwrap();
+        if let LayerKind::Adjustment(crate::layer::Adjustment::Levels { gamma, .. }) = &layer.kind {
+            assert_eq!(*gamma, 2.0);
+        } else {
+            panic!("expected Levels after redo");
+        }
+    }
+
+    #[test]
+    fn undo_add_adjustment_layer() {
+        let mut doc = Document::new("Test", 100, 100);
+        doc.add_adjustment_layer(
+            "HS",
+            crate::layer::Adjustment::HueSaturation {
+                hue: 0.0,
+                saturation: 0.5,
+                lightness: 0.0,
+            },
+        );
+        assert_eq!(doc.layers.len(), 2);
+        doc.undo().unwrap();
+        assert_eq!(doc.layers.len(), 1);
+    }
+
+    #[test]
+    fn duplicate_adjustment_layer() {
+        let mut doc = Document::new("Test", 100, 100);
+        let adj_id = doc.add_adjustment_layer(
+            "Curves",
+            crate::layer::Adjustment::Curves {
+                points: vec![(0.0, 0.0), (0.5, 0.7), (1.0, 1.0)],
+            },
+        );
+        let dup_id = doc.duplicate_layer(adj_id).unwrap();
+        assert_eq!(doc.layers.len(), 3);
+        assert_ne!(adj_id, dup_id);
+        let dup = doc.find_layer(dup_id).unwrap();
+        assert!(matches!(dup.kind, LayerKind::Adjustment(_)));
     }
 }

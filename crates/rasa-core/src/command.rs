@@ -70,6 +70,11 @@ pub enum Command {
         group_index: usize,
         children: Vec<(Layer, usize)>,
     },
+    SetAdjustment {
+        layer_id: Uuid,
+        old_adjustment: crate::layer::Adjustment,
+        new_adjustment: crate::layer::Adjustment,
+    },
 }
 
 /// Undo/redo history for a document.

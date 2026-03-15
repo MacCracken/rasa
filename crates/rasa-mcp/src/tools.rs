@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use rasa_core::color::BlendMode;
-use rasa_core::layer::Layer;
+use rasa_core::layer::{Adjustment, Layer};
 
 use crate::state::SessionState;
 
@@ -44,7 +44,7 @@ pub fn list_tools() -> Vec<ToolDef> {
                     "document_id": { "type": "string", "description": "Document UUID" },
                     "action": {
                         "type": "string",
-                        "enum": ["add", "remove", "rename", "set_opacity", "set_blend_mode", "set_visibility", "duplicate", "reorder", "merge_down"],
+                        "enum": ["add", "remove", "rename", "set_opacity", "set_blend_mode", "set_visibility", "duplicate", "reorder", "merge_down", "add_adjustment", "set_adjustment"],
                         "description": "Layer operation to perform"
                     },
                     "layer_id": { "type": "string", "description": "Target layer UUID (for existing layers)" },
@@ -52,7 +52,20 @@ pub fn list_tools() -> Vec<ToolDef> {
                     "opacity": { "type": "number", "description": "Opacity 0.0-1.0 (for set_opacity)" },
                     "blend_mode": { "type": "string", "description": "Blend mode name (for set_blend_mode)" },
                     "visible": { "type": "boolean", "description": "Visibility (for set_visibility)" },
-                    "index": { "type": "integer", "description": "Target index (for reorder)" }
+                    "index": { "type": "integer", "description": "Target index (for reorder)" },
+                    "adjustment_type": {
+                        "type": "string",
+                        "enum": ["brightness_contrast", "hue_saturation", "curves", "levels"],
+                        "description": "Adjustment type (for add_adjustment/set_adjustment)"
+                    },
+                    "brightness": { "type": "number", "description": "Brightness -1.0 to 1.0" },
+                    "contrast": { "type": "number", "description": "Contrast -1.0 to 1.0" },
+                    "hue": { "type": "number", "description": "Hue shift -180 to 180 degrees" },
+                    "saturation": { "type": "number", "description": "Saturation -1.0 to 1.0" },
+                    "lightness": { "type": "number", "description": "Lightness -1.0 to 1.0" },
+                    "black": { "type": "number", "description": "Black point 0.0-1.0 (for levels)" },
+                    "white": { "type": "number", "description": "White point 0.0-1.0 (for levels)" },
+                    "gamma": { "type": "number", "description": "Gamma 0.1-10.0 (for levels)" }
                 }
             }),
         },
@@ -270,6 +283,33 @@ fn tool_edit_layer(state: &SessionState, args: &Value) -> Result<Value, String> 
                 .map_err(|e| e.to_string())?;
             Ok(json!({ "action": "merged_down" }))
         }
+        "add_adjustment" => {
+            let name = args
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Adjustment");
+            let adjustment = parse_adjustment(args)?;
+            let layer_id = state
+                .with_doc_mut(doc_id, |d| d.add_adjustment_layer(name, adjustment))
+                .map_err(|e| e.to_string())?;
+            Ok(json!({
+                "layer_id": layer_id.to_string(),
+                "action": "adjustment_added",
+                "non_destructive": true,
+            }))
+        }
+        "set_adjustment" => {
+            let layer_id = parse_uuid(args, "layer_id")?;
+            let adjustment = parse_adjustment(args)?;
+            state
+                .with_doc_mut(doc_id, |d| d.set_adjustment(layer_id, adjustment))
+                .map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?;
+            Ok(json!({
+                "action": "adjustment_updated",
+                "non_destructive": true,
+            }))
+        }
         _ => Err(format!("unknown action: {action}")),
     }
 }
@@ -449,6 +489,68 @@ fn parse_uuid(args: &Value, key: &str) -> Result<Uuid, String> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| format!("missing {key}"))?;
     Uuid::parse_str(s).map_err(|_| format!("invalid UUID for {key}: {s}"))
+}
+
+fn parse_adjustment(args: &Value) -> Result<Adjustment, String> {
+    let adj_type = args
+        .get("adjustment_type")
+        .and_then(|v| v.as_str())
+        .ok_or("missing adjustment_type")?;
+    match adj_type {
+        "brightness_contrast" => {
+            let brightness = args
+                .get("brightness")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0) as f32;
+            let contrast = args.get("contrast").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            Ok(Adjustment::BrightnessContrast {
+                brightness: brightness.clamp(-1.0, 1.0),
+                contrast: contrast.clamp(-1.0, 1.0),
+            })
+        }
+        "hue_saturation" => {
+            let hue = args.get("hue").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let saturation = args
+                .get("saturation")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0) as f32;
+            let lightness = args
+                .get("lightness")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0) as f32;
+            Ok(Adjustment::HueSaturation {
+                hue: hue.clamp(-180.0, 180.0),
+                saturation: saturation.clamp(-1.0, 1.0),
+                lightness: lightness.clamp(-1.0, 1.0),
+            })
+        }
+        "curves" => {
+            let points = args
+                .get("points")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|p| {
+                            let a = p.as_array()?;
+                            Some((a.first()?.as_f64()? as f32, a.get(1)?.as_f64()? as f32))
+                        })
+                        .collect()
+                })
+                .unwrap_or_else(|| vec![(0.0, 0.0), (1.0, 1.0)]);
+            Ok(Adjustment::Curves { points })
+        }
+        "levels" => {
+            let black = args.get("black").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let white = args.get("white").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+            let gamma = args.get("gamma").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+            Ok(Adjustment::Levels {
+                black: black.clamp(0.0, 1.0),
+                white: white.clamp(0.0, 1.0),
+                gamma: gamma.clamp(0.1, 10.0),
+            })
+        }
+        _ => Err(format!("unknown adjustment_type: {adj_type}")),
+    }
 }
 
 fn parse_blend_mode(s: &str) -> Result<BlendMode, String> {
@@ -939,6 +1041,173 @@ mod tests {
             &json!({
                 "document_id": id.to_string(),
                 "action": "explode",
+            }),
+        );
+        assert!(result.is_err());
+    }
+
+    // ── Non-destructive adjustment layer tests ──────────
+
+    #[test]
+    fn add_adjustment_brightness_contrast() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 100, 100);
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add_adjustment",
+                "name": "Brighten",
+                "adjustment_type": "brightness_contrast",
+                "brightness": 0.3,
+                "contrast": 0.1,
+            }),
+        )
+        .unwrap();
+        assert_eq!(result["action"], "adjustment_added");
+        assert_eq!(result["non_destructive"], true);
+        assert!(result["layer_id"].is_string());
+        let count = state.with_doc(id, |d| d.layers.len()).unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn add_adjustment_hue_saturation() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 100, 100);
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add_adjustment",
+                "adjustment_type": "hue_saturation",
+                "hue": 45.0,
+                "saturation": -0.3,
+            }),
+        )
+        .unwrap();
+        assert_eq!(result["action"], "adjustment_added");
+    }
+
+    #[test]
+    fn add_adjustment_levels() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 100, 100);
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add_adjustment",
+                "adjustment_type": "levels",
+                "black": 0.05,
+                "white": 0.95,
+                "gamma": 1.2,
+            }),
+        )
+        .unwrap();
+        assert_eq!(result["action"], "adjustment_added");
+    }
+
+    #[test]
+    fn add_adjustment_curves() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 100, 100);
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add_adjustment",
+                "adjustment_type": "curves",
+                "points": [[0.0, 0.0], [0.5, 0.7], [1.0, 1.0]],
+            }),
+        )
+        .unwrap();
+        assert_eq!(result["action"], "adjustment_added");
+    }
+
+    #[test]
+    fn set_adjustment_updates_existing() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 100, 100);
+        let add_result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add_adjustment",
+                "adjustment_type": "brightness_contrast",
+                "brightness": 0.1,
+            }),
+        )
+        .unwrap();
+        let layer_id = add_result["layer_id"].as_str().unwrap();
+
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "set_adjustment",
+                "layer_id": layer_id,
+                "adjustment_type": "brightness_contrast",
+                "brightness": 0.8,
+                "contrast": 0.5,
+            }),
+        )
+        .unwrap();
+        assert_eq!(result["action"], "adjustment_updated");
+        assert_eq!(result["non_destructive"], true);
+    }
+
+    #[test]
+    fn set_adjustment_on_raster_errors() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        let layer_id = state.with_doc(id, |d| d.layers[0].id).unwrap();
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "set_adjustment",
+                "layer_id": layer_id.to_string(),
+                "adjustment_type": "brightness_contrast",
+                "brightness": 0.5,
+            }),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn add_adjustment_missing_type_errors() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add_adjustment",
+            }),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn add_adjustment_unknown_type_errors() {
+        let state = SessionState::new();
+        let id = state.create_document("Test", 10, 10);
+        let result = call_tool(
+            &state,
+            "rasa_edit_layer",
+            &json!({
+                "document_id": id.to_string(),
+                "action": "add_adjustment",
+                "adjustment_type": "vignette",
             }),
         );
         assert!(result.is_err());

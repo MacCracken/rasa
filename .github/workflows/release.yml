@@ -115,10 +115,33 @@ jobs:
           path: sbom-out/
           retention-days: 90
 
+  checksums:
+    name: Generate Checksums
+    runs-on: ubuntu-latest
+    needs: [build-release]
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Generate combined SHA256SUMS
+        run: |
+          cd artifacts
+          find . -name '*.tar.gz' -exec sha256sum {} \; | sed 's|  \./[^/]*/|  |' > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: artifacts/SHA256SUMS
+          retention-days: 7
+
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build-release, generate-sbom]
+    needs: [build-release, generate-sbom, checksums]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -168,18 +191,25 @@ jobs:
             | Linux amd64 | `rasa-${{ steps.version.outputs.version }}-linux-amd64.tar.gz` |
             | Linux arm64 | `rasa-${{ steps.version.outputs.version }}-linux-arm64.tar.gz` |
 
+            ### Container
+            ```
+            docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            ```
+
             ### Verification
             Each archive includes a `.sha256` checksum file.
+            A combined `SHA256SUMS` file is also attached.
           files: |
             release-artifacts/release-amd64/*
             release-artifacts/release-arm64/*
             release-artifacts/sbom/*
-          prerelease: true
+            release-artifacts/checksums/*
+          prerelease: false
 
   container:
     name: Publish Container
     runs-on: ubuntu-latest
-    needs: ci-gate
+    needs: [ci-gate, build-release]
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}

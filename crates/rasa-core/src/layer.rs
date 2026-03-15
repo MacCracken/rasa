@@ -71,6 +71,28 @@ impl Layer {
             kind: LayerKind::Raster { width, height },
         }
     }
+
+    pub fn new_adjustment(
+        name: impl Into<String>,
+        adjustment: Adjustment,
+        doc_size: (u32, u32),
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name: name.into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+            blend_mode: BlendMode::default(),
+            bounds: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: doc_size.0 as f64,
+                height: doc_size.1 as f64,
+            },
+            kind: LayerKind::Adjustment(adjustment),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -226,5 +248,35 @@ mod tests {
     #[test]
     fn blend_mode_default_is_normal() {
         assert_eq!(BlendMode::default(), BlendMode::Normal);
+    }
+
+    #[test]
+    fn new_adjustment_layer() {
+        let adj = Adjustment::BrightnessContrast {
+            brightness: 0.5,
+            contrast: 0.0,
+        };
+        let layer = Layer::new_adjustment("Brighten", adj, (800, 600));
+        assert_eq!(layer.name, "Brighten");
+        assert!(layer.visible);
+        assert_eq!(layer.opacity, 1.0);
+        assert_eq!(layer.bounds.width, 800.0);
+        assert_eq!(layer.bounds.height, 600.0);
+        assert!(matches!(
+            layer.kind,
+            LayerKind::Adjustment(Adjustment::BrightnessContrast { .. })
+        ));
+    }
+
+    #[test]
+    fn new_adjustment_unique_ids() {
+        let adj = Adjustment::Levels {
+            black: 0.0,
+            white: 1.0,
+            gamma: 1.0,
+        };
+        let a = Layer::new_adjustment("A", adj.clone(), (10, 10));
+        let b = Layer::new_adjustment("B", adj, (10, 10));
+        assert_ne!(a.id, b.id);
     }
 }

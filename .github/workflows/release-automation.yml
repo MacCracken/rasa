@@ -36,11 +36,15 @@ jobs:
       - name: Update VERSION file
         run: echo "${{ inputs.version }}" > VERSION
 
+      - name: Update Cargo.toml workspace version
+        run: |
+          sed -i "s/^version = \".*\"/version = \"${{ inputs.version }}\"/" Cargo.toml
+
       - name: Commit and tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION
+          git add VERSION Cargo.toml
           git commit -m "release: ${{ inputs.version }}"
           git tag -a "${{ inputs.version }}" -m "Release ${{ inputs.version }}"
 

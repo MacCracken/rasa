@@ -3340,7 +3340,7 @@ checksum = "ca45419789ae5a7899559e9512e58ca889e41f04f1f2445e9f4b290ceccd1d08"
 
 [[package]]
 name = "rasa-ai"
-version = "2026.3.13"
+version = "2026.3.15"
 dependencies = [
  "image",
  "rasa-core",
@@ -3357,7 +3357,7 @@ dependencies = [
 
 [[package]]
 name = "rasa-core"
-version = "2026.3.13"
+version = "2026.3.15"
 dependencies = [
  "serde",
  "serde_json",
@@ -3367,7 +3367,7 @@ dependencies = [
 
 [[package]]
 name = "rasa-engine"
-version = "2026.3.13"
+version = "2026.3.15"
 dependencies = [
  "rasa-core",
  "rasa-gpu",
@@ -3378,7 +3378,7 @@ dependencies = [
 
 [[package]]
 name = "rasa-gpu"
-version = "2026.3.13"
+version = "2026.3.15"
 dependencies = [
  "rasa-core",
  "thiserror 2.0.18",
@@ -3388,7 +3388,7 @@ dependencies = [
 
 [[package]]
 name = "rasa-mcp"
-version = "2026.3.13"
+version = "2026.3.15"
 dependencies = [
  "rasa-ai",
  "rasa-core",
@@ -3405,7 +3405,7 @@ dependencies = [
 
 [[package]]
 name = "rasa-storage"
-version = "2026.3.13"
+version = "2026.3.15"
 dependencies = [
  "chrono",
  "image",
@@ -3420,7 +3420,7 @@ dependencies = [
 
 [[package]]
 name = "rasa-ui"
-version = "2026.3.13"
+version = "2026.3.15"
 dependencies = [
  "eframe",
  "egui",

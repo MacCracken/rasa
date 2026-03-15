@@ -25,6 +25,9 @@ pub enum RasaError {
     #[error("cannot remove last layer")]
     CannotRemoveLastLayer,
 
+    #[error("not an adjustment layer: {0}")]
+    NotAnAdjustmentLayer(uuid::Uuid),
+
     // ── Selection errors ────────────────────────────────
     #[error("invalid selection: {0}")]
     InvalidSelection(String),

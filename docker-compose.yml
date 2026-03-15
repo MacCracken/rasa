@@ -1,0 +1,50 @@
+services:
+  rasa:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: rasa:latest
+    container_name: rasa
+    ports:
+      - "${RASA_PORT:-8080}:8080"
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - RASA_DATA_DIR=/var/lib/rasa/data
+      - RASA_MODEL_DIR=/var/lib/rasa/models
+    volumes:
+      - rasa-data:/var/lib/rasa/data
+      - rasa-models:/var/lib/rasa/models
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "rasa-mcp", "--health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  rasa-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    image: rasa-dev:latest
+    container_name: rasa-dev
+    ports:
+      - "${RASA_PORT:-8080}:8080"
+    environment:
+      - RUST_LOG=${RUST_LOG:-debug}
+      - CARGO_TERM_COLOR=always
+    volumes:
+      - .:/workspace
+    profiles:
+      - dev
+
+volumes:
+  rasa-data:
+  rasa-models:

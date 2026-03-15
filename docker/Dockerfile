@@ -28,5 +28,10 @@ COPY config/rasa.example.toml /etc/rasa/config.toml
 USER rasa
 WORKDIR /var/lib/rasa
 
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["rasa-mcp", "--health"] || exit 1
+
 ENTRYPOINT ["tini", "--"]
 CMD ["rasa-mcp"]
