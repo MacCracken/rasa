@@ -4,7 +4,7 @@ FROM ghcr.io/maccracken/agnosticos:latest
 USER root
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cmake pkg-config libssl-dev git build-essential \
+    cmake pkg-config git build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Rust toolchain (pinned to stable)

@@ -3,7 +3,7 @@
 FROM rust:1.85-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
-    cmake pkg-config libssl-dev git \
+    cmake pkg-config git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
