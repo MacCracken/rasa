@@ -2,7 +2,7 @@
 
 > **Version**: 2026.3.15
 > **Status**: MVP v1 complete — all 10 phases done
-> **Tests**: 475 passing (89% coverage on testable crates)
+> **Tests**: 484 passing (89% coverage on testable crates)
 
 ---
 
@@ -18,7 +18,7 @@
 | 6 — GPU Acceleration | wgpu init, 9 WGSL shaders, compute pipeline, benchmarks | Done |
 | 7 — AI Foundation | Synapse API client, model management, pre/post-processing | Done |
 | 8 — AI Features | Inpainting, upscaling, background removal, generative fill | Done |
-| 9 — MCP & Agnoshi | 5 MCP tools, 5 agnoshi intents, `.agnos-agent` bundle | Done |
+| 9 — MCP & Agnoshi | 6 MCP tools, 5 agnoshi intents, `.agnos-agent` bundle | Done |
 | 10 — UI Shell | egui desktop app, canvas, panels, shortcuts | Done |
 
 ---
@@ -35,7 +35,7 @@ Items planned after MVP v1 ships:
 - **Text engine** — text layers with font rendering, paragraph styles
 
 ### Professional Features
-- **Batch processing** — apply operations to multiple files
+*(All items complete)*
 
 ### Platform
 - **Plugin system** — third-party filters, tools, AI models

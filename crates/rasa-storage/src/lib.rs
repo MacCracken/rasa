@@ -1,3 +1,4 @@
+pub mod batch;
 pub mod catalog;
 pub mod export;
 pub mod format;

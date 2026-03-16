@@ -3541,6 +3541,7 @@ dependencies = [
  "lcms2",
  "psd",
  "rasa-core",
+ "rasa-engine",
  "rusqlite",
  "serde",
  "serde_json",

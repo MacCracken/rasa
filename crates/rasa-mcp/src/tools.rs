@@ -18,7 +18,7 @@ pub struct ToolDef {
     pub input_schema: Value,
 }
 
-/// Return all 5 MCP tool definitions.
+/// Return all 6 MCP tool definitions.
 pub fn list_tools() -> Vec<ToolDef> {
     vec![
         ToolDef {
@@ -116,6 +116,48 @@ pub fn list_tools() -> Vec<ToolDef> {
                 }
             }),
         },
+        ToolDef {
+            name: "rasa_batch_export".into(),
+            description: "Batch process multiple image files: import, apply filters, export".into(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["input_paths", "output_dir"],
+                "properties": {
+                    "input_paths": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "List of input file paths"
+                    },
+                    "output_dir": { "type": "string", "description": "Output directory path" },
+                    "format": {
+                        "type": "string",
+                        "enum": ["png", "jpeg", "webp", "tiff", "bmp", "gif", "psd"],
+                        "description": "Output format (default: keep original)"
+                    },
+                    "quality": { "type": "integer", "description": "JPEG quality 1-100 (default 90)" },
+                    "filters": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "enum": ["invert", "grayscale", "brightness_contrast", "hue_saturation", "blur", "sharpen"]
+                                },
+                                "brightness": { "type": "number" },
+                                "contrast": { "type": "number" },
+                                "hue": { "type": "number" },
+                                "saturation": { "type": "number" },
+                                "lightness": { "type": "number" },
+                                "radius": { "type": "number" },
+                                "amount": { "type": "number" }
+                            }
+                        },
+                        "description": "Filters to apply to each image in order"
+                    }
+                }
+            }),
+        },
     ]
 }
 
@@ -127,6 +169,7 @@ pub fn call_tool(state: &SessionState, name: &str, args: &Value) -> Result<Value
         "rasa_apply_filter" => tool_apply_filter(state, args),
         "rasa_get_document" => tool_get_document(state, args),
         "rasa_export" => tool_export(state, args),
+        "rasa_batch_export" => tool_batch_export(args),
         _ => Err(format!("unknown tool: {name}")),
     }
 }
@@ -481,6 +524,112 @@ fn tool_export(state: &SessionState, args: &Value) -> Result<Value, String> {
     }))
 }
 
+fn tool_batch_export(args: &Value) -> Result<Value, String> {
+    use rasa_storage::batch::BatchJob;
+    use rasa_storage::format::ImageFormat;
+
+    let input_paths: Vec<PathBuf> = args
+        .get("input_paths")
+        .and_then(|v| v.as_array())
+        .ok_or("missing input_paths")?
+        .iter()
+        .filter_map(|v| v.as_str().map(PathBuf::from))
+        .collect();
+
+    if input_paths.is_empty() {
+        return Err("input_paths must not be empty".into());
+    }
+
+    let output_dir = PathBuf::from(
+        args.get("output_dir")
+            .and_then(|v| v.as_str())
+            .ok_or("missing output_dir")?,
+    );
+
+    let format = args
+        .get("format")
+        .and_then(|v| v.as_str())
+        .map(|s| {
+            let ext = format!("file.{s}");
+            ImageFormat::from_path(std::path::Path::new(&ext))
+                .ok_or_else(|| format!("unknown format: {s}"))
+        })
+        .transpose()?;
+
+    let jpeg_quality = args.get("quality").and_then(|v| v.as_u64()).unwrap_or(90) as u8;
+
+    let filters = args
+        .get("filters")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|f| parse_batch_filter(f).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let job = BatchJob {
+        input_paths,
+        output_dir,
+        format,
+        jpeg_quality,
+        filters,
+        icc_profile: None,
+    };
+
+    let result = job.run().map_err(|e| e.to_string())?;
+
+    let file_results: Vec<Value> = result
+        .results
+        .iter()
+        .map(|r| {
+            json!({
+                "input": r.input.display().to_string(),
+                "output": r.output.as_ref().map(|p| p.display().to_string()),
+                "error": r.error,
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "total": result.total,
+        "succeeded": result.succeeded,
+        "failed": result.failed,
+        "results": file_results,
+    }))
+}
+
+fn parse_batch_filter(v: &Value) -> Result<rasa_storage::batch::BatchFilter, String> {
+    use rasa_storage::batch::BatchFilter;
+
+    let name = v
+        .get("name")
+        .and_then(|n| n.as_str())
+        .ok_or("filter missing name")?;
+
+    match name {
+        "invert" => Ok(BatchFilter::Invert),
+        "grayscale" => Ok(BatchFilter::Grayscale),
+        "brightness_contrast" => Ok(BatchFilter::BrightnessContrast {
+            brightness: v.get("brightness").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32,
+            contrast: v.get("contrast").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32,
+        }),
+        "hue_saturation" => Ok(BatchFilter::HueSaturation {
+            hue: v.get("hue").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32,
+            saturation: v.get("saturation").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32,
+            lightness: v.get("lightness").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32,
+        }),
+        "blur" => Ok(BatchFilter::GaussianBlur {
+            radius: v.get("radius").and_then(|n| n.as_u64()).unwrap_or(2) as u32,
+        }),
+        "sharpen" => Ok(BatchFilter::Sharpen {
+            radius: v.get("radius").and_then(|n| n.as_u64()).unwrap_or(1) as u32,
+            amount: v.get("amount").and_then(|n| n.as_f64()).unwrap_or(0.5) as f32,
+        }),
+        _ => Err(format!("unknown filter: {name}")),
+    }
+}
+
 // ── Helpers ──
 
 fn parse_uuid(args: &Value, key: &str) -> Result<Uuid, String> {
@@ -576,15 +725,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn list_tools_returns_five() {
+    fn list_tools_returns_six() {
         let tools = list_tools();
-        assert_eq!(tools.len(), 5);
+        assert_eq!(tools.len(), 6);
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
         assert!(names.contains(&"rasa_open_image"));
         assert!(names.contains(&"rasa_edit_layer"));
         assert!(names.contains(&"rasa_apply_filter"));
         assert!(names.contains(&"rasa_get_document"));
         assert!(names.contains(&"rasa_export"));
+        assert!(names.contains(&"rasa_batch_export"));
     }
 
     #[test]
@@ -1177,6 +1327,57 @@ mod tests {
                 "layer_id": layer_id.to_string(),
                 "adjustment_type": "brightness_contrast",
                 "brightness": 0.5,
+            }),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn batch_export_basic() {
+        // Create test input files
+        let dir = std::env::temp_dir().join("rasa_test_mcp_batch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input_path = dir.join("mcp_batch_input.png");
+        let buf = rasa_core::pixel::PixelBuffer::filled(
+            4,
+            4,
+            rasa_core::color::Color::new(1.0, 0.0, 0.0, 1.0),
+        );
+        rasa_storage::export::export_buffer(
+            &buf,
+            &input_path,
+            &rasa_storage::format::ExportSettings::Png,
+        )
+        .unwrap();
+
+        let output_dir = dir.join("mcp_batch_output");
+        let state = SessionState::new();
+        let result = call_tool(
+            &state,
+            "rasa_batch_export",
+            &json!({
+                "input_paths": [input_path.to_str().unwrap()],
+                "output_dir": output_dir.to_str().unwrap(),
+                "filters": [{ "name": "grayscale" }]
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(result["total"], 1);
+        assert_eq!(result["succeeded"], 1);
+        assert_eq!(result["failed"], 0);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn batch_export_missing_inputs_errors() {
+        let state = SessionState::new();
+        let result = call_tool(
+            &state,
+            "rasa_batch_export",
+            &json!({
+                "output_dir": "/tmp/batch_test"
             }),
         );
         assert!(result.is_err());

@@ -1,6 +1,6 @@
 [package]
 name = "rasa-mcp"
-description = "MCP 2.0 server exposing 5 tools for Claude integration"
+description = "MCP 2.0 server exposing 6 tools for Claude integration"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
