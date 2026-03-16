@@ -172,10 +172,8 @@ pub fn export_psd_flat(buf: &PixelBuffer, path: &Path) -> Result<(), RasaError> 
     out.write_all(&1u16.to_be_bytes()).map_err(write_err)?; // version
     out.write_all(&[0u8; 6]).map_err(write_err)?; // reserved
     out.write_all(&4u16.to_be_bytes()).map_err(write_err)?; // channels (RGBA)
-    out.write_all(&height.to_be_bytes())
-        .map_err(write_err)?;
-    out.write_all(&width.to_be_bytes())
-        .map_err(write_err)?;
+    out.write_all(&height.to_be_bytes()).map_err(write_err)?;
+    out.write_all(&width.to_be_bytes()).map_err(write_err)?;
     out.write_all(&8u16.to_be_bytes()).map_err(write_err)?; // depth (8-bit)
     out.write_all(&3u16.to_be_bytes()).map_err(write_err)?; // color mode (RGB)
 

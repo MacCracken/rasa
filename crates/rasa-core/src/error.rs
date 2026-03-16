@@ -36,6 +36,13 @@ pub enum RasaError {
     #[error("singular transform: matrix is not invertible")]
     SingularTransform,
 
+    // ── Color management errors ─────────────────────────
+    #[error("invalid ICC profile: {0}")]
+    InvalidIccProfile(String),
+
+    #[error("ICC color conversion failed: {0}")]
+    ColorConversionFailed(String),
+
     // ── Storage / format errors ─────────────────────────
     #[error("unsupported format: {0}")]
     UnsupportedFormat(String),
@@ -163,6 +170,18 @@ mod tests {
     fn error_display_model_not_found() {
         let e = RasaError::ModelNotFound("upscaler-v2".into());
         assert!(e.to_string().contains("upscaler-v2"));
+    }
+
+    #[test]
+    fn error_display_invalid_icc_profile() {
+        let e = RasaError::InvalidIccProfile("bad header".into());
+        assert!(e.to_string().contains("bad header"));
+    }
+
+    #[test]
+    fn error_display_color_conversion_failed() {
+        let e = RasaError::ColorConversionFailed("transform error".into());
+        assert!(e.to_string().contains("transform error"));
     }
 
     #[test]

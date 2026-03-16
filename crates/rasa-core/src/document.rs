@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::color::BlendMode;
+use crate::color::{BlendMode, ColorSpace, IccProfile};
 use crate::command::{Command, History};
 use crate::error::RasaError;
 use crate::geometry::Size;
@@ -14,10 +14,16 @@ pub struct Document {
     pub name: String,
     pub size: Size,
     pub dpi: f32,
+    /// The document's working color space.
+    #[serde(default)]
+    pub color_space: ColorSpace,
     pub layers: Vec<Layer>,
     pub active_layer: Option<Uuid>,
     #[serde(skip)]
     pub pixel_data: Vec<(Uuid, PixelBuffer)>,
+    /// Embedded ICC profile for color management.
+    #[serde(skip)]
+    pub icc_profile: Option<IccProfile>,
     #[serde(skip)]
     history: Option<History>,
 }
@@ -40,9 +46,11 @@ impl Document {
             name: name.into(),
             size: Size { width, height },
             dpi: 72.0,
+            color_space: ColorSpace::default(),
             layers: vec![bg],
             active_layer: Some(bg_id),
             pixel_data,
+            icc_profile: None,
             history: Some(History::new(200)),
         }
     }

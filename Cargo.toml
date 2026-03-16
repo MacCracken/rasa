@@ -49,6 +49,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 image = "0.25"
 psd = "0.3"
 imagepipe = "0.5"
+lcms2 = "6"
 
 # GPU
 wgpu = "24"

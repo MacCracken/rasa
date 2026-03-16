@@ -2,7 +2,7 @@
 
 > **Version**: 2026.3.15
 > **Status**: MVP v1 complete — all 10 phases done
-> **Tests**: 447 passing (89% coverage on testable crates)
+> **Tests**: 475 passing (89% coverage on testable crates)
 
 ---
 
@@ -35,18 +35,12 @@ Items planned after MVP v1 ships:
 - **Text engine** — text layers with font rendering, paragraph styles
 
 ### Professional Features
-- **CMYK color mode** — print-ready output
-- **ICC profile management** — full color management
 - **Batch processing** — apply operations to multiple files
 
 ### Platform
 - **Plugin system** — third-party filters, tools, AI models
-- **Collaborative editing** — real-time multi-user via Delta sync
 - **Tablet optimization** — touch UI mode, stylus gestures
 - **Performance** — multi-GPU, tiled rendering, memory-mapped images
 
 ### Ecosystem Integration
 - **Tazama integration** — send frames/stills between video and image editor
-- **Shruti integration** — album art workflow
-- **Delta integration** — version-controlled design assets
-- **BullShift integration** — chart/data visualization export

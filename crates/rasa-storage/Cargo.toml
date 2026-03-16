@@ -18,3 +18,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 psd = { workspace = true }
 imagepipe = { workspace = true }
+lcms2 = { workspace = true }
+
+[features]
+default = []

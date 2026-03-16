@@ -83,9 +83,19 @@ pub enum ExportSettings {
     Jpeg(JpegQuality),
     WebP,
     Tiff,
+    /// CMYK TIFF export (4-channel separated).
+    TiffCmyk,
     Bmp,
     Gif,
     Psd,
+}
+
+/// Full export configuration including color management.
+#[derive(Debug, Clone)]
+pub struct ExportConfig {
+    pub settings: ExportSettings,
+    /// Optional ICC profile to embed in the output file.
+    pub icc_profile: Option<rasa_core::color::IccProfile>,
 }
 
 impl ExportSettings {
@@ -109,7 +119,7 @@ impl ExportSettings {
             Self::Png => ImageFormat::Png,
             Self::Jpeg(_) => ImageFormat::Jpeg,
             Self::WebP => ImageFormat::WebP,
-            Self::Tiff => ImageFormat::Tiff,
+            Self::Tiff | Self::TiffCmyk => ImageFormat::Tiff,
             Self::Bmp => ImageFormat::Bmp,
             Self::Gif => ImageFormat::Gif,
             Self::Psd => ImageFormat::Psd,

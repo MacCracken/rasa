@@ -25,6 +25,11 @@ pub fn render(doc: &Document, target_space: ColorSpace) -> RenderOutput {
             // Approximate: sRGB transfer function for now, proper P3 gamut mapping is post-MVP
             convert_linear_to_srgb(&composited)
         }
+        ColorSpace::Cmyk => {
+            // CMYK rendering: convert to sRGB for display; actual CMYK
+            // conversion happens at the export boundary in rasa-storage.
+            convert_linear_to_srgb(&composited)
+        }
     };
 
     RenderOutput {

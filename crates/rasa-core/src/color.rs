@@ -149,6 +149,143 @@ pub enum ColorSpace {
     Srgb,
     LinearRgb,
     DisplayP3,
+    Cmyk,
+}
+
+// ── ICC Profile ──────────────────────────────────────
+
+/// Color space described by an ICC profile (parsed from header bytes 16..19).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProfileColorSpace {
+    Rgb,
+    Cmyk,
+    Gray,
+    Lab,
+    Unknown,
+}
+
+/// An ICC color profile stored as raw bytes with parsed metadata.
+///
+/// Used for color management at import/export boundaries. The internal
+/// editing pipeline always works in linear RGBA f32.
+#[derive(Debug, Clone)]
+pub struct IccProfile {
+    data: Vec<u8>,
+    /// Human-readable profile description.
+    pub description: String,
+    /// The color space this profile describes.
+    pub color_space: ProfileColorSpace,
+}
+
+impl IccProfile {
+    /// Minimum valid ICC profile size (header alone is 128 bytes).
+    const MIN_SIZE: usize = 128;
+
+    /// Parse an ICC profile from raw bytes.
+    ///
+    /// Validates the header, extracts the color space signature and
+    /// a basic description.
+    pub fn from_bytes(data: Vec<u8>) -> Result<Self, crate::error::RasaError> {
+        if data.len() < Self::MIN_SIZE {
+            return Err(crate::error::RasaError::InvalidIccProfile(
+                "data too short for ICC header".into(),
+            ));
+        }
+
+        // Color space signature at bytes 16..20.
+        let sig = &data[16..20];
+        let color_space = match sig {
+            b"RGB " => ProfileColorSpace::Rgb,
+            b"CMYK" => ProfileColorSpace::Cmyk,
+            b"GRAY" => ProfileColorSpace::Gray,
+            b"Lab " => ProfileColorSpace::Lab,
+            _ => ProfileColorSpace::Unknown,
+        };
+
+        // Profile description: use the color space name as a fallback.
+        // A full parser would read the 'desc' tag, but that's complex.
+        let description = match color_space {
+            ProfileColorSpace::Rgb => "RGB Profile",
+            ProfileColorSpace::Cmyk => "CMYK Profile",
+            ProfileColorSpace::Gray => "Gray Profile",
+            ProfileColorSpace::Lab => "Lab Profile",
+            ProfileColorSpace::Unknown => "Unknown Profile",
+        }
+        .to_string();
+
+        Ok(Self {
+            data,
+            description,
+            color_space,
+        })
+    }
+
+    /// Access the raw ICC profile bytes.
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    /// Return the built-in sRGB IEC61966-2.1 v2 profile.
+    pub fn srgb_v2() -> Self {
+        Self {
+            data: SRGB_V2_PROFILE.to_vec(),
+            description: "sRGB IEC61966-2.1".to_string(),
+            color_space: ProfileColorSpace::Rgb,
+        }
+    }
+}
+
+/// Minimal sRGB v2 ICC profile (standard 3144-byte profile).
+/// Generated from the canonical sRGB IEC61966-2.1 specification.
+/// We embed a minimal valid header + TRC + matrix profile.
+static SRGB_V2_PROFILE: &[u8] = include_bytes!("srgb_v2.icc");
+
+// ── CMYK Color ───────────────────────────────────────
+
+/// CMYK color with components in 0.0-1.0 range.
+///
+/// Used only at export boundaries — the internal pipeline works in linear RGBA.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CmykColor {
+    pub c: f32,
+    pub m: f32,
+    pub y: f32,
+    pub k: f32,
+}
+
+impl CmykColor {
+    pub fn new(c: f32, m: f32, y: f32, k: f32) -> Self {
+        Self { c, m, y, k }
+    }
+}
+
+/// Naive RGB-to-CMYK conversion (no ICC profile).
+///
+/// Input values should be in sRGB 0.0-1.0 range.
+pub fn rgb_to_cmyk_naive(r: f32, g: f32, b: f32) -> CmykColor {
+    let k = 1.0 - r.max(g).max(b);
+    if k >= 1.0 {
+        return CmykColor::new(0.0, 0.0, 0.0, 1.0);
+    }
+    let inv_k = 1.0 / (1.0 - k);
+    CmykColor::new(
+        (1.0 - r - k) * inv_k,
+        (1.0 - g - k) * inv_k,
+        (1.0 - b - k) * inv_k,
+        k,
+    )
+}
+
+/// Naive CMYK-to-RGB conversion (no ICC profile).
+///
+/// Returns (r, g, b) in sRGB 0.0-1.0 range.
+pub fn cmyk_to_rgb_naive(cmyk: CmykColor) -> (f32, f32, f32) {
+    let inv_k = 1.0 - cmyk.k;
+    (
+        (1.0 - cmyk.c) * inv_k,
+        (1.0 - cmyk.m) * inv_k,
+        (1.0 - cmyk.y) * inv_k,
+    )
 }
 
 /// Blending mode for layer compositing.
@@ -221,5 +358,136 @@ mod tests {
     fn linear_to_srgb_clamps() {
         assert_eq!(linear_to_srgb(-1.0), 0.0);
         assert!(approx_eq(linear_to_srgb(2.0), 1.0));
+    }
+
+    // ── ICC Profile tests ────────────────────────────
+
+    #[test]
+    fn icc_profile_from_bytes_too_short() {
+        let result = IccProfile::from_bytes(vec![0; 10]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn icc_profile_from_bytes_rgb_signature() {
+        let mut data = vec![0u8; 128];
+        data[16..20].copy_from_slice(b"RGB ");
+        let profile = IccProfile::from_bytes(data).unwrap();
+        assert_eq!(profile.color_space, ProfileColorSpace::Rgb);
+    }
+
+    #[test]
+    fn icc_profile_from_bytes_cmyk_signature() {
+        let mut data = vec![0u8; 128];
+        data[16..20].copy_from_slice(b"CMYK");
+        let profile = IccProfile::from_bytes(data).unwrap();
+        assert_eq!(profile.color_space, ProfileColorSpace::Cmyk);
+    }
+
+    #[test]
+    fn icc_profile_from_bytes_gray_signature() {
+        let mut data = vec![0u8; 128];
+        data[16..20].copy_from_slice(b"GRAY");
+        let profile = IccProfile::from_bytes(data).unwrap();
+        assert_eq!(profile.color_space, ProfileColorSpace::Gray);
+    }
+
+    #[test]
+    fn icc_profile_from_bytes_lab_signature() {
+        let mut data = vec![0u8; 128];
+        data[16..20].copy_from_slice(b"Lab ");
+        let profile = IccProfile::from_bytes(data).unwrap();
+        assert_eq!(profile.color_space, ProfileColorSpace::Lab);
+    }
+
+    #[test]
+    fn icc_profile_from_bytes_unknown_signature() {
+        let mut data = vec![0u8; 128];
+        data[16..20].copy_from_slice(b"XYZ ");
+        let profile = IccProfile::from_bytes(data).unwrap();
+        assert_eq!(profile.color_space, ProfileColorSpace::Unknown);
+    }
+
+    #[test]
+    fn icc_profile_srgb_v2_valid() {
+        let profile = IccProfile::srgb_v2();
+        assert_eq!(profile.color_space, ProfileColorSpace::Rgb);
+        assert!(!profile.data().is_empty());
+        assert!(profile.description.contains("sRGB"));
+    }
+
+    #[test]
+    fn icc_profile_data_preserved() {
+        let mut data = vec![0u8; 128];
+        data[16..20].copy_from_slice(b"RGB ");
+        data[0] = 42;
+        let profile = IccProfile::from_bytes(data).unwrap();
+        assert_eq!(profile.data()[0], 42);
+    }
+
+    // ── CMYK tests ───────────────────────────────────
+
+    #[test]
+    fn cmyk_color_new() {
+        let c = CmykColor::new(0.1, 0.2, 0.3, 0.4);
+        assert_eq!(c.c, 0.1);
+        assert_eq!(c.m, 0.2);
+        assert_eq!(c.y, 0.3);
+        assert_eq!(c.k, 0.4);
+    }
+
+    #[test]
+    fn rgb_to_cmyk_naive_white() {
+        let cmyk = rgb_to_cmyk_naive(1.0, 1.0, 1.0);
+        assert!(approx_eq(cmyk.c, 0.0));
+        assert!(approx_eq(cmyk.m, 0.0));
+        assert!(approx_eq(cmyk.y, 0.0));
+        assert!(approx_eq(cmyk.k, 0.0));
+    }
+
+    #[test]
+    fn rgb_to_cmyk_naive_black() {
+        let cmyk = rgb_to_cmyk_naive(0.0, 0.0, 0.0);
+        assert!(approx_eq(cmyk.c, 0.0));
+        assert!(approx_eq(cmyk.m, 0.0));
+        assert!(approx_eq(cmyk.y, 0.0));
+        assert!(approx_eq(cmyk.k, 1.0));
+    }
+
+    #[test]
+    fn rgb_to_cmyk_naive_pure_red() {
+        let cmyk = rgb_to_cmyk_naive(1.0, 0.0, 0.0);
+        assert!(approx_eq(cmyk.c, 0.0));
+        assert!(approx_eq(cmyk.m, 1.0));
+        assert!(approx_eq(cmyk.y, 1.0));
+        assert!(approx_eq(cmyk.k, 0.0));
+    }
+
+    #[test]
+    fn rgb_to_cmyk_naive_pure_cyan() {
+        let cmyk = rgb_to_cmyk_naive(0.0, 1.0, 1.0);
+        assert!(approx_eq(cmyk.c, 1.0));
+        assert!(approx_eq(cmyk.m, 0.0));
+        assert!(approx_eq(cmyk.y, 0.0));
+        assert!(approx_eq(cmyk.k, 0.0));
+    }
+
+    #[test]
+    fn cmyk_to_rgb_roundtrip() {
+        for (r, g, b) in [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.5, 0.3, 0.8)] {
+            let cmyk = rgb_to_cmyk_naive(r, g, b);
+            let (r2, g2, b2) = cmyk_to_rgb_naive(cmyk);
+            assert!(approx_eq(r, r2), "r: {r} vs {r2}");
+            assert!(approx_eq(g, g2), "g: {g} vs {g2}");
+            assert!(approx_eq(b, b2), "b: {b} vs {b2}");
+        }
+    }
+
+    #[test]
+    fn cmyk_to_rgb_naive_black() {
+        let (r, g, b) = cmyk_to_rgb_naive(CmykColor::new(0.0, 0.0, 0.0, 1.0));
+        assert!(approx_eq(r, 0.0));
+        assert!(approx_eq(g, 0.0));
+        assert!(approx_eq(b, 0.0));
     }
 }
