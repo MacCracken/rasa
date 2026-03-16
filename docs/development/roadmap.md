@@ -1,8 +1,8 @@
-# Roadmap — Path to MVP v1
+# Roadmap
 
-> **Version**: 2026.3.15
-> **Status**: MVP v1 complete — all 10 phases done
-> **Tests**: 556 passing (89% coverage on testable crates)
+> **Version**: 2026.3.16
+> **Status**: MVP v1 complete — all 10 phases done, post-MVP in progress
+> **Tests**: 566 passing (89% coverage on testable crates)
 
 ---
 
@@ -18,24 +18,16 @@
 | 6 — GPU Acceleration | wgpu init, 9 WGSL shaders, compute pipeline, benchmarks | Done |
 | 7 — AI Foundation | Synapse API client, model management, pre/post-processing | Done |
 | 8 — AI Features | Inpainting, upscaling, background removal, generative fill | Done |
-| 9 — MCP & Agnoshi | 6 MCP tools, 5 agnoshi intents, `.agnos-agent` bundle | Done |
+| 9 — MCP & Agnoshi | 8 MCP tools, 5 agnoshi intents, `.agnos-agent` bundle | Done |
 | 10 — UI Shell | egui desktop app, canvas, panels, shortcuts | Done |
 
 ---
 
-## Post-MVP
-
-Items planned after MVP v1 ships:
-
-### Creative Expansion
-*(All items complete)*
-
-### Professional Features
-*(All items complete)*
+## Post-MVP Remaining
 
 ### Platform
 - **Plugin system** — third-party filters, tools, AI models
 - **Tablet optimization** — touch UI mode, stylus gestures
 
 ### Ecosystem Integration
-- **Tazama integration** — send frames/stills between video and image editor
+*(All items complete)*

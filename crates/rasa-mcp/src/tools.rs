@@ -18,7 +18,7 @@ pub struct ToolDef {
     pub input_schema: Value,
 }
 
-/// Return all 6 MCP tool definitions.
+/// Return all 8 MCP tool definitions.
 pub fn list_tools() -> Vec<ToolDef> {
     vec![
         ToolDef {
@@ -158,6 +158,36 @@ pub fn list_tools() -> Vec<ToolDef> {
                 }
             }),
         },
+        ToolDef {
+            name: "rasa_import_video_frame".into(),
+            description:
+                "Import an image file (typically a video frame from Tazama) with source metadata"
+                    .into(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                    "path": { "type": "string", "description": "Path to the frame PNG file" },
+                    "source_clip_id": { "type": "string", "description": "Tazama clip UUID the frame came from" },
+                    "frame_number": { "type": "integer", "description": "Which frame index in the source clip" }
+                }
+            }),
+        },
+        ToolDef {
+            name: "rasa_export_for_video".into(),
+            description:
+                "Export the current document as a PNG optimized for video timeline insertion".into(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["document_id", "output_path"],
+                "properties": {
+                    "document_id": { "type": "string", "description": "Document UUID" },
+                    "output_path": { "type": "string", "description": "Where to write the PNG file" },
+                    "source_clip_id": { "type": "string", "description": "Tazama clip UUID to pass back" },
+                    "frame_number": { "type": "integer", "description": "Frame index to pass back to Tazama" }
+                }
+            }),
+        },
     ]
 }
 
@@ -170,6 +200,8 @@ pub fn call_tool(state: &SessionState, name: &str, args: &Value) -> Result<Value
         "rasa_get_document" => tool_get_document(state, args),
         "rasa_export" => tool_export(state, args),
         "rasa_batch_export" => tool_batch_export(args),
+        "rasa_import_video_frame" => tool_import_video_frame(state, args),
+        "rasa_export_for_video" => tool_export_for_video(state, args),
         _ => Err(format!("unknown tool: {name}")),
     }
 }
@@ -616,6 +648,95 @@ fn tool_batch_export(args: &Value) -> Result<Value, String> {
     }))
 }
 
+fn tool_import_video_frame(state: &SessionState, args: &Value) -> Result<Value, String> {
+    let path_str = args
+        .get("path")
+        .and_then(|v| v.as_str())
+        .ok_or("missing path")?;
+    let path = PathBuf::from(path_str);
+
+    if !path.is_file() {
+        return Err(format!("file not found: {}", path.display()));
+    }
+
+    let source_clip_id = args.get("source_clip_id").and_then(|v| v.as_str());
+    let frame_number = args.get("frame_number").and_then(|v| v.as_u64());
+
+    let id = state.open_image(&path).map_err(|e| e.to_string())?;
+    let info = state
+        .with_doc(id, |d| {
+            let mut result = json!({
+                "document_id": d.id.to_string(),
+                "name": d.name,
+                "width": d.size.width,
+                "height": d.size.height,
+            });
+
+            let mut source = json!({});
+            if let Some(clip_id) = source_clip_id {
+                source["clip_id"] = json!(clip_id);
+            }
+            if let Some(frame) = frame_number {
+                source["frame_number"] = json!(frame);
+            }
+            result["source"] = source;
+
+            result
+        })
+        .map_err(|e| e.to_string())?;
+
+    Ok(info)
+}
+
+fn tool_export_for_video(state: &SessionState, args: &Value) -> Result<Value, String> {
+    let doc_id = parse_uuid(args, "document_id")?;
+    let output_path = args
+        .get("output_path")
+        .and_then(|v| v.as_str())
+        .ok_or("missing output_path")?;
+    let path = PathBuf::from(output_path);
+
+    // Validate parent directory exists
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.is_dir()
+    {
+        return Err(format!("directory does not exist: {}", parent.display()));
+    }
+
+    let source_clip_id = args.get("source_clip_id").and_then(|v| v.as_str());
+    let frame_number = args.get("frame_number").and_then(|v| v.as_u64());
+
+    // Composite and export as PNG
+    let (width, height) = state
+        .with_doc(doc_id, |d| {
+            let composited = rasa_engine::compositor::composite(d);
+            let config = rasa_storage::format::ExportConfig {
+                settings: rasa_storage::format::ExportSettings::Png,
+                icc_profile: d.icc_profile.clone(),
+            };
+            rasa_storage::export::export_buffer_with_config(&composited, &path, &config)
+                .map_err(|e| e.to_string())?;
+            Ok::<(u32, u32), String>((d.size.width, d.size.height))
+        })
+        .map_err(|e| e.to_string())??;
+
+    let mut result = json!({
+        "path": output_path,
+        "width": width,
+        "height": height,
+    });
+
+    if let Some(clip_id) = source_clip_id {
+        result["source_clip_id"] = json!(clip_id);
+    }
+    if let Some(frame) = frame_number {
+        result["frame_number"] = json!(frame);
+    }
+
+    Ok(result)
+}
+
 fn parse_batch_filter(v: &Value) -> Result<rasa_storage::batch::BatchFilter, String> {
     use rasa_storage::batch::BatchFilter;
 
@@ -750,9 +871,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn list_tools_returns_six() {
+    fn list_tools_returns_eight() {
         let tools = list_tools();
-        assert_eq!(tools.len(), 6);
+        assert_eq!(tools.len(), 8);
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
         assert!(names.contains(&"rasa_open_image"));
         assert!(names.contains(&"rasa_edit_layer"));
@@ -760,6 +881,8 @@ mod tests {
         assert!(names.contains(&"rasa_get_document"));
         assert!(names.contains(&"rasa_export"));
         assert!(names.contains(&"rasa_batch_export"));
+        assert!(names.contains(&"rasa_import_video_frame"));
+        assert!(names.contains(&"rasa_export_for_video"));
     }
 
     #[test]
@@ -1543,6 +1666,248 @@ mod tests {
             }),
         );
         assert!(result.is_err());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn import_video_frame_creates_document() {
+        // Create a test PNG to import
+        let dir = std::env::temp_dir().join("rasa_test_mcp_video_frame");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input_path = dir.join("test_frame.png");
+        let buf = rasa_core::pixel::PixelBuffer::filled(
+            16,
+            9,
+            rasa_core::color::Color::new(0.5, 0.5, 0.5, 1.0),
+        );
+        rasa_storage::export::export_buffer(
+            &buf,
+            &input_path,
+            &rasa_storage::format::ExportSettings::Png,
+        )
+        .unwrap();
+
+        let state = SessionState::new();
+        let result = call_tool(
+            &state,
+            "rasa_import_video_frame",
+            &json!({
+                "path": input_path.to_str().unwrap(),
+                "source_clip_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                "frame_number": 42,
+            }),
+        )
+        .unwrap();
+
+        assert!(result["document_id"].is_string());
+        assert_eq!(result["width"], 16);
+        assert_eq!(result["height"], 9);
+        assert_eq!(
+            result["source"]["clip_id"],
+            "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        );
+        assert_eq!(result["source"]["frame_number"], 42);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn export_for_video_creates_file() {
+        let state = SessionState::new();
+        let id = state.create_document("VideoFrame", 32, 18);
+
+        let dir = std::env::temp_dir().join("rasa_test_mcp_export_video");
+        std::fs::create_dir_all(&dir).unwrap();
+        let output_path = dir.join("exported_frame.png");
+
+        let result = call_tool(
+            &state,
+            "rasa_export_for_video",
+            &json!({
+                "document_id": id.to_string(),
+                "output_path": output_path.to_str().unwrap(),
+                "source_clip_id": "11111111-2222-3333-4444-555555555555",
+                "frame_number": 10,
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(result["width"], 32);
+        assert_eq!(result["height"], 18);
+        assert_eq!(
+            result["source_clip_id"],
+            "11111111-2222-3333-4444-555555555555"
+        );
+        assert_eq!(result["frame_number"], 10);
+        assert!(output_path.exists());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn video_frame_tools_in_list() {
+        let tools = list_tools();
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+        assert!(names.contains(&"rasa_import_video_frame"));
+        assert!(names.contains(&"rasa_export_for_video"));
+    }
+
+    #[test]
+    fn import_video_frame_without_source_metadata() {
+        let dir = std::env::temp_dir().join("rasa_test_mcp_video_frame2");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input_path = dir.join("frame_no_meta.png");
+        let buf = rasa_core::pixel::PixelBuffer::filled(
+            8,
+            8,
+            rasa_core::color::Color::new(1.0, 0.0, 0.0, 1.0),
+        );
+        rasa_storage::export::export_buffer(
+            &buf,
+            &input_path,
+            &rasa_storage::format::ExportSettings::Png,
+        )
+        .unwrap();
+
+        let state = SessionState::new();
+        let result = call_tool(
+            &state,
+            "rasa_import_video_frame",
+            &json!({ "path": input_path.to_str().unwrap() }),
+        )
+        .unwrap();
+
+        assert!(result["document_id"].is_string());
+        assert_eq!(result["width"], 8);
+        assert_eq!(result["height"], 8);
+        // Source metadata should be null when not provided
+        assert!(result["source"]["clip_id"].is_null());
+        assert!(result["source"]["frame_number"].is_null());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn import_video_frame_nonexistent_errors() {
+        let state = SessionState::new();
+        let result = call_tool(
+            &state,
+            "rasa_import_video_frame",
+            &json!({ "path": "/nonexistent/frame.png" }),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn import_video_frame_missing_path_errors() {
+        let state = SessionState::new();
+        let result = call_tool(&state, "rasa_import_video_frame", &json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn export_for_video_without_source_metadata() {
+        let state = SessionState::new();
+        let id = state.create_document("Frame", 16, 16);
+
+        let dir = std::env::temp_dir().join("rasa_test_mcp_export_video2");
+        std::fs::create_dir_all(&dir).unwrap();
+        let output_path = dir.join("frame_no_meta.png");
+
+        let result = call_tool(
+            &state,
+            "rasa_export_for_video",
+            &json!({
+                "document_id": id.to_string(),
+                "output_path": output_path.to_str().unwrap(),
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(result["width"], 16);
+        assert_eq!(result["height"], 16);
+        assert!(result["source_clip_id"].is_null());
+        assert!(result["frame_number"].is_null());
+        assert!(output_path.exists());
+
+        // Verify the file is a valid PNG
+        let data = std::fs::read(&output_path).unwrap();
+        assert_eq!(&data[..4], &[0x89, b'P', b'N', b'G']);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn export_for_video_missing_doc_errors() {
+        let state = SessionState::new();
+        let result = call_tool(
+            &state,
+            "rasa_export_for_video",
+            &json!({
+                "document_id": "00000000-0000-0000-0000-000000000000",
+                "output_path": "/tmp/doesnt_matter.png",
+            }),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn export_for_video_missing_output_path_errors() {
+        let state = SessionState::new();
+        let id = state.create_document("Frame", 4, 4);
+        let result = call_tool(
+            &state,
+            "rasa_export_for_video",
+            &json!({ "document_id": id.to_string() }),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn video_frame_roundtrip() {
+        // Simulate full workflow: create doc → export for video → import back
+        let state = SessionState::new();
+        let id = state.create_document("Original", 24, 12);
+
+        let dir = std::env::temp_dir().join("rasa_test_mcp_roundtrip");
+        std::fs::create_dir_all(&dir).unwrap();
+        let frame_path = dir.join("roundtrip_frame.png");
+
+        // Export
+        let export_result = call_tool(
+            &state,
+            "rasa_export_for_video",
+            &json!({
+                "document_id": id.to_string(),
+                "output_path": frame_path.to_str().unwrap(),
+                "source_clip_id": "clip-abc",
+                "frame_number": 99,
+            }),
+        )
+        .unwrap();
+        assert_eq!(export_result["width"], 24);
+
+        // Import the exported frame back
+        let import_result = call_tool(
+            &state,
+            "rasa_import_video_frame",
+            &json!({
+                "path": frame_path.to_str().unwrap(),
+                "source_clip_id": "clip-abc",
+                "frame_number": 99,
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(import_result["width"], 24);
+        assert_eq!(import_result["height"], 12);
+        assert_eq!(import_result["source"]["clip_id"], "clip-abc");
+        assert_eq!(import_result["source"]["frame_number"], 99);
+
+        // Two documents should exist now
+        let docs = state.list_documents();
+        assert_eq!(docs.len(), 2);
 
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -206,7 +206,7 @@ mod tests {
         };
         let resp = handle_request(&state, &req);
         let tools = resp.result.unwrap()["tools"].as_array().unwrap().len();
-        assert_eq!(tools, 6);
+        assert_eq!(tools, 8);
     }
 
     #[test]

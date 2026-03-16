@@ -2,6 +2,113 @@
 
 All notable changes to Rasa will be documented in this file.
 
+## [2026.3.16] — 2026-03-16
+
+### Added
+
+**PSD Import/Export** (rasa-storage)
+- Multi-layer PSD import with layer name, opacity, visibility, and blend mode mapping (12 direct + 16 grouped PSD blend modes)
+- Positioned layer data placement within document-size buffers
+- Flat (composited) PSD export with valid file header, 4-channel RGBA uncompressed image data
+- Blend mode mapping between PSD and rasa (bidirectional)
+
+**RAW Format Support** (rasa-storage)
+- Camera RAW import: CR2, NEF, ARW, DNG, RAF, ORF, RW2 via `imagepipe`
+- Full demosaic, white balance, and tone-mapping pipeline with 16-bit precision
+- Import-only (RAW is a capture format, not an output format)
+
+**ICC Profile Management** (rasa-core, rasa-storage)
+- `IccProfile` struct with header parsing (RGB/CMYK/Gray/Lab color space detection)
+- Built-in sRGB IEC61966-2.1 v2 profile via `IccProfile::srgb_v2()`
+- `ProfileColorSpace` enum for profile type identification
+- Document-level `color_space` and `icc_profile` fields
+- ICC-aware export via `export_buffer_with_config()` — embeds profiles in PNG, JPEG, TIFF
+- `ExportConfig` struct wrapping settings + optional ICC profile
+- Profile transform between RGB profiles via `lcms2` (apply_profile_transform)
+- Error variants: `InvalidIccProfile`, `ColorConversionFailed`
+
+**CMYK Color Mode** (rasa-core, rasa-storage)
+- `CmykColor` struct with c/m/y/k components (0.0-1.0)
+- `Cmyk` variant added to `ColorSpace` enum
+- Naive RGB↔CMYK conversion (`rgb_to_cmyk_naive`, `cmyk_to_rgb_naive`)
+- ICC-based CMYK conversion via lcms2 (`buffer_to_cmyk_icc`, `cmyk_to_buffer_icc`)
+- CMYK TIFF export (`ExportSettings::TiffCmyk`) with proper IFD structure, resolution tags, InkSet
+
+**Batch Processing** (rasa-storage, rasa-mcp)
+- `BatchJob` engine: import files, apply filter chains, export with format conversion
+- 6 batch filters: Invert, Grayscale, BrightnessContrast, HueSaturation, GaussianBlur, Sharpen
+- `rasa_batch_export` MCP tool (tool #6) for agent-driven batch operations
+- Batch size capped at 1000 files, filter validation with error reporting
+
+**Text Engine** (rasa-core, rasa-engine, rasa-ui)
+- Extended `TextLayer` with `color`, `alignment` (Left/Center/Right), `line_height` fields
+- `TextAlign` enum for horizontal text alignment
+- Text rendering module using `ab_glyph` for glyph rasterization with kerning and multiline
+- Compositor integration: explicit `LayerKind::Text` match arm with on-demand rendering
+- Text UI tool (shortcut "X") — 10th tool in palette
+
+**Vector Tools** (rasa-core, rasa-engine)
+- `VectorData`, `VectorPath`, `PathSegment` (MoveTo/LineTo/QuadTo/CubicTo) types
+- `FillStyle` (Solid), `StrokeStyle` (color, width, cap, join), `LineCap`, `LineJoin` enums
+- Shape constructors: `VectorPath::rect()`, `ellipse()`, `line()`
+- Vector rendering via `kurbo` — winding-number fill, distance-based stroke rasterization
+- `LayerKind::Vector` upgraded from unit stub to `Vector(VectorData)` with compositor integration
+
+**AI Features — Provider Abstraction** (rasa-ai)
+- `InferenceProvider` trait for provider-agnostic AI operations (text-to-image, style transfer, color grading)
+- `SynapseProvider` wrapping existing SynapseClient for local inference
+- `ProviderRegistry` for runtime provider storage and selection
+- Style transfer: `ModelKind::StyleTransfer`, client method, pipeline request, workflow operation
+- AI color grading: `ModelKind::ColorGrading`, client method, pipeline request, workflow operation
+- New client methods: `style_transfer()`, `color_grade()` on SynapseClient
+
+**Performance** (rasa-engine)
+- Rayon parallel compositing: row-level parallelism in `composite_layer`
+- Parallel filters: `gaussian_blur`, `sharpen`, `invert`, `grayscale`, all adjustments parallelized via `par_chunks_mut`/`par_iter_mut`
+
+**Tazama Integration** (rasa-mcp)
+- `rasa_import_video_frame` MCP tool — import frame PNG with source clip/frame metadata for round-trip
+- `rasa_export_for_video` MCP tool — export composited document as PNG with source metadata
+- File-based exchange protocol: Tazama extracts frame → Rasa edits → Rasa exports → Tazama inserts as Image clip
+
+**Documentation**
+- ADR-008: Text Engine (ab_glyph, on-demand rendering)
+- ADR-009: Parallel Compositing with Rayon
+- ADR-010: Vector Tools (kurbo, rasterize-on-demand)
+- ADR-011: AI Provider Abstraction (InferenceProvider trait)
+- ADR-012: Tazama Integration (file-based MCP exchange)
+- Guide: Text Layers
+- Guide: Performance
+- Guide: Vector Layers
+- Guide: AI Features
+- Guide: Tazama Integration
+
+### Fixed
+
+- PSD export channel order: corrected from A,R,G,B to R,G,B,A per PSD spec
+- Integer overflow in PSD pixel index calculation (u32 → usize arithmetic)
+- RAW import out-of-bounds panic on truncated decoded data
+- RAW dimension cast overflow (usize → u32::try_from with error)
+- `ExportSettings::for_format(Raw)` changed from panic to Result
+- `to_image_format()` replaced `unreachable!()` with proper Result errors
+- `buffer_to_image()` replaced `expect()` with safe fallback
+- `merge_down()` replaced `.unwrap()` with `let Some(..) else { continue }`
+- `rgba_bytes_to_buffer()` safe on short input (no OOB panic)
+- CMYK TIFF: added XResolution, YResolution, ResolutionUnit tags for spec compliance
+- MCP export now passes document ICC profile through to `export_buffer_with_config`
+- PSD layer dimensions use `u32::from()` (safe widening from u16)
+- Batch size capped at 1000 files (prevent resource exhaustion)
+- Invalid batch filters now return errors instead of being silently dropped
+- JPEG quality clamped to 1-100 before cast (prevents u8 truncation)
+- Blur/sharpen radius clamped to 1-500 in MCP batch tool
+- `RasaError::Other` replaced with specific error variants (`Io`, `CorruptFile`, `UnsupportedFormat`) at 8 sites
+
+### Test Summary
+
+**566 tests passing** across 7 crates (up from 410). 89% coverage on testable crates.
+
+---
+
 ## [2026.3.13] — 2026-03-13
 
 ### Added
