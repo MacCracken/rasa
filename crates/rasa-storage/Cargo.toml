@@ -16,3 +16,5 @@ chrono = { workspace = true }
 rusqlite = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+psd = { workspace = true }
+imagepipe = { workspace = true }

@@ -10,7 +10,7 @@ use rasa_core::pixel::PixelBuffer;
 use crate::format::ImageFormat;
 
 /// Convert raw RGBA u8 bytes into a PixelBuffer using slice access.
-fn rgba_bytes_to_buffer(raw: &[u8], width: u32, height: u32) -> PixelBuffer {
+pub(crate) fn rgba_bytes_to_buffer(raw: &[u8], width: u32, height: u32) -> PixelBuffer {
     let mut buf = PixelBuffer::new(width, height);
     let pixels = buf.pixels_mut();
     for (i, px) in pixels.iter_mut().enumerate() {
@@ -27,8 +27,14 @@ fn rgba_bytes_to_buffer(raw: &[u8], width: u32, height: u32) -> PixelBuffer {
 
 /// Import an image file as a new Document with a single raster layer.
 pub fn import_image(path: &Path) -> Result<Document, RasaError> {
-    let _format = ImageFormat::from_path(path)
+    let format = ImageFormat::from_path(path)
         .ok_or_else(|| RasaError::UnsupportedFormat(path.display().to_string()))?;
+
+    match format {
+        ImageFormat::Psd => return crate::psd::import_psd(path),
+        ImageFormat::Raw => return crate::raw::import_raw(path),
+        _ => {}
+    }
 
     let buf = import_as_buffer(path)?;
 

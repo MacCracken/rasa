@@ -11,6 +11,8 @@ pub enum ImageFormat {
     Tiff,
     Bmp,
     Gif,
+    Psd,
+    Raw,
 }
 
 impl ImageFormat {
@@ -24,6 +26,8 @@ impl ImageFormat {
             "tiff" | "tif" => Some(Self::Tiff),
             "bmp" => Some(Self::Bmp),
             "gif" => Some(Self::Gif),
+            "psd" => Some(Self::Psd),
+            "cr2" | "nef" | "arw" | "dng" | "raf" | "orf" | "rw2" => Some(Self::Raw),
             _ => None,
         }
     }
@@ -37,12 +41,22 @@ impl ImageFormat {
             Self::Tiff => "tiff",
             Self::Bmp => "bmp",
             Self::Gif => "gif",
+            Self::Psd => "psd",
+            Self::Raw => "dng",
         }
+    }
+
+    /// Whether this format can be used for export.
+    pub fn is_exportable(self) -> bool {
+        !matches!(self, Self::Raw)
     }
 
     /// Whether this format supports alpha/transparency.
     pub fn supports_alpha(self) -> bool {
-        matches!(self, Self::Png | Self::WebP | Self::Tiff | Self::Gif)
+        matches!(
+            self,
+            Self::Png | Self::WebP | Self::Tiff | Self::Gif | Self::Psd
+        )
     }
 }
 
@@ -71,6 +85,7 @@ pub enum ExportSettings {
     Tiff,
     Bmp,
     Gif,
+    Psd,
 }
 
 impl ExportSettings {
@@ -82,6 +97,10 @@ impl ExportSettings {
             ImageFormat::Tiff => Self::Tiff,
             ImageFormat::Bmp => Self::Bmp,
             ImageFormat::Gif => Self::Gif,
+            ImageFormat::Psd => Self::Psd,
+            ImageFormat::Raw => {
+                panic!("RAW format is import-only, cannot export")
+            }
         }
     }
 
@@ -93,6 +112,7 @@ impl ExportSettings {
             Self::Tiff => ImageFormat::Tiff,
             Self::Bmp => ImageFormat::Bmp,
             Self::Gif => ImageFormat::Gif,
+            Self::Psd => ImageFormat::Psd,
         }
     }
 }
@@ -217,5 +237,87 @@ mod tests {
         assert!(ImageFormat::Tiff.supports_alpha());
         assert!(!ImageFormat::Bmp.supports_alpha());
         assert!(ImageFormat::Gif.supports_alpha());
+    }
+
+    #[test]
+    fn detect_psd() {
+        assert_eq!(
+            ImageFormat::from_path(Path::new("design.psd")),
+            Some(ImageFormat::Psd)
+        );
+    }
+
+    #[test]
+    fn detect_raw_formats() {
+        assert_eq!(
+            ImageFormat::from_path(Path::new("photo.cr2")),
+            Some(ImageFormat::Raw)
+        );
+        assert_eq!(
+            ImageFormat::from_path(Path::new("photo.nef")),
+            Some(ImageFormat::Raw)
+        );
+        assert_eq!(
+            ImageFormat::from_path(Path::new("photo.arw")),
+            Some(ImageFormat::Raw)
+        );
+        assert_eq!(
+            ImageFormat::from_path(Path::new("photo.dng")),
+            Some(ImageFormat::Raw)
+        );
+        assert_eq!(
+            ImageFormat::from_path(Path::new("photo.raf")),
+            Some(ImageFormat::Raw)
+        );
+        assert_eq!(
+            ImageFormat::from_path(Path::new("photo.orf")),
+            Some(ImageFormat::Raw)
+        );
+        assert_eq!(
+            ImageFormat::from_path(Path::new("photo.rw2")),
+            Some(ImageFormat::Raw)
+        );
+    }
+
+    #[test]
+    fn psd_alpha_support() {
+        assert!(ImageFormat::Psd.supports_alpha());
+    }
+
+    #[test]
+    fn raw_no_alpha() {
+        assert!(!ImageFormat::Raw.supports_alpha());
+    }
+
+    #[test]
+    fn psd_extension() {
+        assert_eq!(ImageFormat::Psd.extension(), "psd");
+    }
+
+    #[test]
+    fn raw_extension() {
+        assert_eq!(ImageFormat::Raw.extension(), "dng");
+    }
+
+    #[test]
+    fn raw_not_exportable() {
+        assert!(!ImageFormat::Raw.is_exportable());
+    }
+
+    #[test]
+    fn psd_is_exportable() {
+        assert!(ImageFormat::Psd.is_exportable());
+    }
+
+    #[test]
+    fn export_settings_psd() {
+        let s = ExportSettings::for_format(ImageFormat::Psd);
+        assert_eq!(s.format(), ImageFormat::Psd);
+    }
+
+    #[test]
+    #[should_panic(expected = "RAW format is import-only")]
+    fn export_settings_raw_panics() {
+        ExportSettings::for_format(ImageFormat::Raw);
     }
 }

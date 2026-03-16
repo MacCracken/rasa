@@ -1,8 +1,8 @@
 # Roadmap — Path to MVP v1
 
-> **Version**: 2026.3.13
+> **Version**: 2026.3.15
 > **Status**: MVP v1 complete — all 10 phases done
-> **Tests**: 410 passing (89% coverage on testable crates)
+> **Tests**: 447 passing (89% coverage on testable crates)
 
 ---
 
@@ -13,7 +13,7 @@
 | 1 — Foundation | Workspace + core types, error hierarchy, serde tests | Done |
 | 2 — Canvas & Layers | 12 blend modes, compositing, groups, merge, undo/redo | Done |
 | 3 — Rendering Pipeline | CPU renderer, 8 filters, tile cache, adjustment layers | Done |
-| 4 — Storage & Formats | PNG/JPEG/WebP/TIFF/BMP/GIF, `.rasa` format, SQLite catalog | Done |
+| 4 — Storage & Formats | PNG/JPEG/WebP/TIFF/BMP/GIF/PSD/RAW, `.rasa` format, SQLite catalog | Done |
 | 5 — Basic Tools | Brush, eraser, selection, transform, crop, fill, gradient | Done |
 | 6 — GPU Acceleration | wgpu init, 9 WGSL shaders, compute pipeline, benchmarks | Done |
 | 7 — AI Foundation | Synapse API client, model management, pre/post-processing | Done |
@@ -35,12 +35,9 @@ Items planned after MVP v1 ships:
 - **Text engine** — text layers with font rendering, paragraph styles
 
 ### Professional Features
-- **RAW format support** — Camera RAW processing pipeline
 - **CMYK color mode** — print-ready output
 - **ICC profile management** — full color management
-- **PSD import/export** — Photoshop interop
 - **Batch processing** — apply operations to multiple files
-- **Non-destructive filters** — filter layers with adjustable parameters
 
 ### Platform
 - **Plugin system** — third-party filters, tools, AI models

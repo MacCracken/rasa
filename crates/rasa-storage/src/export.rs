@@ -17,6 +17,9 @@ pub fn export_buffer(
     let img = buffer_to_image(buf);
 
     match settings {
+        ExportSettings::Psd => {
+            return crate::psd::export_psd_flat(buf, path);
+        }
         ExportSettings::Jpeg(quality) => {
             let rgb_img = image::DynamicImage::ImageRgba8(img).to_rgb8();
             let file = std::fs::File::create(path)
@@ -74,6 +77,8 @@ fn to_image_format(format: ImageFormat) -> image::ImageFormat {
         ImageFormat::Tiff => image::ImageFormat::Tiff,
         ImageFormat::Bmp => image::ImageFormat::Bmp,
         ImageFormat::Gif => image::ImageFormat::Gif,
+        ImageFormat::Psd => unreachable!("PSD export handled separately"),
+        ImageFormat::Raw => unreachable!("RAW format is import-only"),
     }
 }
 
