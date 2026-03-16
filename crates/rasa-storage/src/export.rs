@@ -83,7 +83,7 @@ pub fn export_buffer_with_config(
         }
         _ => {
             let img = buffer_to_image(buf);
-            let format = to_image_format(config.settings.format());
+            let format = to_image_format(config.settings.format())?;
             img.save_with_format(path, format)
                 .map_err(|e| RasaError::Other(format!("export failed: {e}")))?;
         }
@@ -127,13 +127,12 @@ fn export_tiff_cmyk(
         .map_err(write_err)?;
 
     // ── IFD Entries ──
-    // Tags: ImageWidth, ImageLength, BitsPerSample, Compression,
-    //       PhotometricInterpretation, StripOffsets, SamplesPerPixel,
-    //       RowsPerStrip, StripByteCounts, InkSet
-    let tag_count: u16 = 10;
+    // Tags must be in ascending order per TIFF spec.
+    let tag_count: u16 = 13;
     let ifd_size = 2 + (tag_count as usize) * 12 + 4; // count + entries + next-IFD
     let bits_offset = (8 + ifd_size) as u32;
-    let strip_offset = bits_offset + 8; // 4 x u16 for BitsPerSample
+    let res_offset = bits_offset + 8; // after BitsPerSample (4 x u16 = 8 bytes)
+    let strip_offset = res_offset + 8; // after resolution RATIONAL (2 x u32 = 8 bytes)
     let strip_byte_count = cmyk_data.len() as u32;
 
     out.write_all(&tag_count.to_le_bytes()).map_err(write_err)?;
@@ -147,16 +146,19 @@ fn export_tiff_cmyk(
         Ok(())
     };
 
-    // SHORT=3, LONG=4
+    // SHORT=3, LONG=4, RATIONAL=5
     write_tag(256, 4, 1, width)?; // ImageWidth
     write_tag(257, 4, 1, height)?; // ImageLength
-    write_tag(258, 3, 4, bits_offset)?; // BitsPerSample (offset to 4 shorts)
+    write_tag(258, 3, 4, bits_offset)?; // BitsPerSample (offset)
     write_tag(259, 3, 1, 1)?; // Compression = None
     write_tag(262, 3, 1, 5)?; // PhotometricInterpretation = Separated (CMYK)
     write_tag(273, 4, 1, strip_offset)?; // StripOffsets
     write_tag(277, 3, 1, 4)?; // SamplesPerPixel = 4
     write_tag(278, 4, 1, height)?; // RowsPerStrip = all rows
     write_tag(279, 4, 1, strip_byte_count)?; // StripByteCounts
+    write_tag(282, 5, 1, res_offset)?; // XResolution (RATIONAL at offset)
+    write_tag(283, 5, 1, res_offset)?; // YResolution (same 72 dpi)
+    write_tag(296, 3, 1, 2)?; // ResolutionUnit = inch
     write_tag(332, 3, 1, 1)?; // InkSet = CMYK
 
     // Next IFD offset = 0 (no more IFDs)
@@ -166,6 +168,10 @@ fn export_tiff_cmyk(
     for _ in 0..4 {
         out.write_all(&8u16.to_le_bytes()).map_err(write_err)?;
     }
+
+    // ── Resolution RATIONAL (72/1 as two u32s) ──
+    out.write_all(&72u32.to_le_bytes()).map_err(write_err)?; // numerator
+    out.write_all(&1u32.to_le_bytes()).map_err(write_err)?; // denominator
 
     // ── Pixel data ──
     out.write_all(&cmyk_data).map_err(write_err)?;
@@ -209,16 +215,20 @@ fn buffer_to_image(buf: &PixelBuffer) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     ImageBuffer::from_raw(w, h, raw).expect("buffer dimensions match")
 }
 
-fn to_image_format(format: ImageFormat) -> image::ImageFormat {
+fn to_image_format(format: ImageFormat) -> Result<image::ImageFormat, RasaError> {
     match format {
-        ImageFormat::Png => image::ImageFormat::Png,
-        ImageFormat::Jpeg => image::ImageFormat::Jpeg,
-        ImageFormat::WebP => image::ImageFormat::WebP,
-        ImageFormat::Tiff => image::ImageFormat::Tiff,
-        ImageFormat::Bmp => image::ImageFormat::Bmp,
-        ImageFormat::Gif => image::ImageFormat::Gif,
-        ImageFormat::Psd => unreachable!("PSD export handled separately"),
-        ImageFormat::Raw => unreachable!("RAW format is import-only"),
+        ImageFormat::Png => Ok(image::ImageFormat::Png),
+        ImageFormat::Jpeg => Ok(image::ImageFormat::Jpeg),
+        ImageFormat::WebP => Ok(image::ImageFormat::WebP),
+        ImageFormat::Tiff => Ok(image::ImageFormat::Tiff),
+        ImageFormat::Bmp => Ok(image::ImageFormat::Bmp),
+        ImageFormat::Gif => Ok(image::ImageFormat::Gif),
+        ImageFormat::Psd => Err(RasaError::UnsupportedFormat(
+            "PSD export handled separately".into(),
+        )),
+        ImageFormat::Raw => Err(RasaError::UnsupportedFormat(
+            "RAW format is import-only".into(),
+        )),
     }
 }
 
@@ -307,8 +317,8 @@ mod tests {
         export_buffer(&buf, &path, &ExportSettings::TiffCmyk).unwrap();
 
         let data = std::fs::read(&path).unwrap();
-        // Header(8) + IFD(2 + 10*12 + 4) + BitsPerSample(8) + pixels(8*6*4)
-        let expected = 8 + 2 + 120 + 4 + 8 + (8 * 6 * 4);
+        // Header(8) + IFD(2 + 13*12 + 4) + BitsPerSample(8) + Resolution(8) + pixels(8*6*4)
+        let expected = 8 + 2 + (13 * 12) + 4 + 8 + 8 + (8 * 6 * 4);
         assert_eq!(data.len(), expected);
 
         std::fs::remove_file(&path).ok();

@@ -540,6 +540,14 @@ fn tool_batch_export(args: &Value) -> Result<Value, String> {
         return Err("input_paths must not be empty".into());
     }
 
+    const MAX_BATCH_SIZE: usize = 1000;
+    if input_paths.len() > MAX_BATCH_SIZE {
+        return Err(format!(
+            "batch size {} exceeds maximum of {MAX_BATCH_SIZE}",
+            input_paths.len()
+        ));
+    }
+
     let output_dir = PathBuf::from(
         args.get("output_dir")
             .and_then(|v| v.as_str())
@@ -556,16 +564,21 @@ fn tool_batch_export(args: &Value) -> Result<Value, String> {
         })
         .transpose()?;
 
-    let jpeg_quality = args.get("quality").and_then(|v| v.as_u64()).unwrap_or(90) as u8;
+    let jpeg_quality = args
+        .get("quality")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(90)
+        .clamp(1, 100) as u8;
 
-    let filters = args
+    let filters: Vec<_> = args
         .get("filters")
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|f| parse_batch_filter(f).ok())
-                .collect()
+                .map(parse_batch_filter)
+                .collect::<Result<Vec<_>, _>>()
         })
+        .transpose()?
         .unwrap_or_default();
 
     let job = BatchJob {
@@ -620,10 +633,18 @@ fn parse_batch_filter(v: &Value) -> Result<rasa_storage::batch::BatchFilter, Str
             lightness: v.get("lightness").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32,
         }),
         "blur" => Ok(BatchFilter::GaussianBlur {
-            radius: v.get("radius").and_then(|n| n.as_u64()).unwrap_or(2) as u32,
+            radius: v
+                .get("radius")
+                .and_then(|n| n.as_u64())
+                .unwrap_or(2)
+                .clamp(1, 500) as u32,
         }),
         "sharpen" => Ok(BatchFilter::Sharpen {
-            radius: v.get("radius").and_then(|n| n.as_u64()).unwrap_or(1) as u32,
+            radius: v
+                .get("radius")
+                .and_then(|n| n.as_u64())
+                .unwrap_or(1)
+                .clamp(1, 500) as u32,
             amount: v.get("amount").and_then(|n| n.as_f64()).unwrap_or(0.5) as f32,
         }),
         _ => Err(format!("unknown filter: {name}")),

@@ -24,11 +24,21 @@ pub fn import_raw(path: &Path) -> Result<Document, RasaError> {
         .output_16bit(None)
         .map_err(|e| RasaError::Other(format!("RAW processing failed: {e}")))?;
 
-    let width = decoded.width as u32;
-    let height = decoded.height as u32;
+    let width = u32::try_from(decoded.width)
+        .map_err(|_| RasaError::Other("RAW image width exceeds u32".into()))?;
+    let height = u32::try_from(decoded.height)
+        .map_err(|_| RasaError::Other("RAW image height exceeds u32".into()))?;
 
     let mut buf = PixelBuffer::new(width, height);
     let pixels = buf.pixels_mut();
+    let expected_len = pixels.len() * 3;
+    if decoded.data.len() < expected_len {
+        return Err(RasaError::Other(format!(
+            "RAW decoded data too short: expected {} bytes, got {}",
+            expected_len,
+            decoded.data.len()
+        )));
+    }
 
     for (i, px) in pixels.iter_mut().enumerate() {
         let offset = i * 3;

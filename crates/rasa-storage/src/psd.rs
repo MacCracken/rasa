@@ -109,7 +109,7 @@ pub fn import_psd(path: &Path) -> Result<Document, RasaError> {
                     if dst_x >= width || dst_y >= height {
                         continue;
                     }
-                    let src_idx = ((y * layer_width + x) * 4) as usize;
+                    let src_idx = ((y as usize) * (layer_width as usize) + (x as usize)) * 4;
                     if src_idx + 3 >= rgba.len() {
                         continue;
                     }
@@ -188,11 +188,11 @@ pub fn export_psd_flat(buf: &PixelBuffer, path: &Path) -> Result<(), RasaError> 
 
     // ── Image Data (raw, uncompressed) ──
     out.write_all(&0u16.to_be_bytes()).map_err(write_err)?; // compression = 0 (raw)
-    // Channels in order: A, R, G, B for RGBA PSD files.
-    out.write_all(&a_chan).map_err(write_err)?;
+    // PSD spec: color channels first (R, G, B), then alpha.
     out.write_all(&r_chan).map_err(write_err)?;
     out.write_all(&g_chan).map_err(write_err)?;
     out.write_all(&b_chan).map_err(write_err)?;
+    out.write_all(&a_chan).map_err(write_err)?;
 
     std::fs::write(path, &out)
         .map_err(|e| RasaError::Other(format!("failed to write PSD: {e}")))?;
