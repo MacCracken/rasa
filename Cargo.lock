@@ -3497,8 +3497,10 @@ dependencies = [
 name = "rasa-engine"
 version = "2026.3.15"
 dependencies = [
+ "ab_glyph",
  "rasa-core",
  "rasa-gpu",
+ "rayon",
  "thiserror 2.0.18",
  "tracing",
  "uuid",

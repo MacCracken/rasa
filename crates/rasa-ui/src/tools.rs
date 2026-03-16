@@ -10,6 +10,7 @@ pub enum ActiveTool {
     Gradient,
     Crop,
     Transform,
+    Text,
 }
 
 impl ActiveTool {
@@ -25,6 +26,7 @@ impl ActiveTool {
             Self::Gradient => "G",
             Self::Crop => "C",
             Self::Transform => "T",
+            Self::Text => "X",
         }
     }
 
@@ -40,6 +42,7 @@ impl ActiveTool {
             Self::Gradient => "Gradient",
             Self::Crop => "Crop",
             Self::Transform => "Transform",
+            Self::Text => "Text",
         }
     }
 }
@@ -60,6 +63,7 @@ mod tests {
             ActiveTool::Gradient,
             ActiveTool::Crop,
             ActiveTool::Transform,
+            ActiveTool::Text,
         ];
         for tool in tools {
             assert!(!tool.shortcut().is_empty());
@@ -74,8 +78,8 @@ mod tests {
     }
 
     #[test]
-    fn nine_tools_total() {
-        // Verify we have all 9 tools
+    fn ten_tools_total() {
+        // Verify we have all 10 tools
         let count = [
             ActiveTool::Brush,
             ActiveTool::Eraser,
@@ -86,8 +90,9 @@ mod tests {
             ActiveTool::Gradient,
             ActiveTool::Crop,
             ActiveTool::Transform,
+            ActiveTool::Text,
         ]
         .len();
-        assert_eq!(count, 9);
+        assert_eq!(count, 10);
     }
 }

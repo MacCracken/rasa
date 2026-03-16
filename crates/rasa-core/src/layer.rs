@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::color::BlendMode;
+use crate::color::{BlendMode, Color};
 use crate::geometry::Rect;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,11 +46,23 @@ pub enum Adjustment {
     },
 }
 
+/// Text alignment within the layer bounds.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextLayer {
     pub content: String,
     pub font_family: String,
     pub font_size: f32,
+    pub color: Color,
+    pub alignment: TextAlign,
+    pub line_height: f32,
 }
 
 impl Layer {
@@ -239,10 +251,31 @@ mod tests {
             content: "Hello World".into(),
             font_family: "Inter".into(),
             font_size: 24.0,
+            color: Color::BLACK,
+            alignment: TextAlign::Left,
+            line_height: 1.2,
         };
         assert_eq!(text.content, "Hello World");
         assert_eq!(text.font_family, "Inter");
         assert_eq!(text.font_size, 24.0);
+        assert_eq!(text.color, Color::BLACK);
+        assert_eq!(text.alignment, TextAlign::Left);
+        assert_eq!(text.line_height, 1.2);
+    }
+
+    #[test]
+    fn text_align_default_is_left() {
+        assert_eq!(TextAlign::default(), TextAlign::Left);
+    }
+
+    #[test]
+    fn text_align_variants() {
+        let left = TextAlign::Left;
+        let center = TextAlign::Center;
+        let right = TextAlign::Right;
+        assert_ne!(left, center);
+        assert_ne!(center, right);
+        assert_ne!(left, right);
     }
 
     #[test]

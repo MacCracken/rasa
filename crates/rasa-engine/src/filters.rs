@@ -1,6 +1,7 @@
 use rasa_core::color::Color;
 use rasa_core::layer::Adjustment;
 use rasa_core::pixel::PixelBuffer;
+use rayon::prelude::*;
 
 /// Apply an adjustment to a pixel buffer in-place.
 pub fn apply_adjustment(buf: &mut PixelBuffer, adj: &Adjustment) {
@@ -26,20 +27,20 @@ pub fn apply_adjustment(buf: &mut PixelBuffer, adj: &Adjustment) {
 /// Brightness: -1.0 to 1.0, Contrast: -1.0 to 1.0
 fn apply_brightness_contrast(buf: &mut PixelBuffer, brightness: f32, contrast: f32) {
     let factor = (1.0 + contrast) / (1.0 - contrast.clamp(-0.9999, 0.9999));
-    for px in buf.pixels_mut() {
+    buf.pixels_mut().par_iter_mut().for_each(|px| {
         let a = px.a;
         px.r = ((px.r + brightness) * factor + 0.5 * (1.0 - factor)).clamp(0.0, 1.0);
         px.g = ((px.g + brightness) * factor + 0.5 * (1.0 - factor)).clamp(0.0, 1.0);
         px.b = ((px.b + brightness) * factor + 0.5 * (1.0 - factor)).clamp(0.0, 1.0);
         px.a = a;
-    }
+    });
 }
 
 /// Hue shift: -180 to 180 degrees, Saturation: -1.0 to 1.0, Lightness: -1.0 to 1.0
 fn apply_hue_saturation(buf: &mut PixelBuffer, hue: f32, saturation: f32, lightness: f32) {
-    for px in buf.pixels_mut() {
+    buf.pixels_mut().par_iter_mut().for_each(|px| {
         if px.a <= 0.0 {
-            continue;
+            return;
         }
         let a = px.a;
         let (mut h, mut s, mut l) = px.to_hsl();
@@ -47,7 +48,7 @@ fn apply_hue_saturation(buf: &mut PixelBuffer, hue: f32, saturation: f32, lightn
         s = (s + saturation).clamp(0.0, 1.0);
         l = (l + lightness).clamp(0.0, 1.0);
         *px = Color::from_hsl(h, s, l, a);
-    }
+    });
 }
 
 /// Apply a curves adjustment using piecewise linear interpolation.
@@ -65,13 +66,13 @@ fn apply_curves(buf: &mut PixelBuffer, points: &[(f32, f32)]) {
         })
         .collect();
 
-    for px in buf.pixels_mut() {
+    buf.pixels_mut().par_iter_mut().for_each(|px| {
         let a = px.a;
         px.r = lut[(px.r.clamp(0.0, 1.0) * 255.0) as usize];
         px.g = lut[(px.g.clamp(0.0, 1.0) * 255.0) as usize];
         px.b = lut[(px.b.clamp(0.0, 1.0) * 255.0) as usize];
         px.a = a;
-    }
+    });
 }
 
 fn interpolate_curve(points: &[(f32, f32)], x: f32) -> f32 {
@@ -101,13 +102,13 @@ fn apply_levels(buf: &mut PixelBuffer, black: f32, white: f32, gamma: f32) {
     let range = (white - black).max(1e-6);
     let inv_gamma = 1.0 / gamma.clamp(0.1, 10.0);
 
-    for px in buf.pixels_mut() {
+    buf.pixels_mut().par_iter_mut().for_each(|px| {
         let a = px.a;
         px.r = level_channel(px.r, black, range, inv_gamma);
         px.g = level_channel(px.g, black, range, inv_gamma);
         px.b = level_channel(px.b, black, range, inv_gamma);
         px.a = a;
-    }
+    });
 }
 
 fn level_channel(v: f32, black: f32, range: f32, inv_gamma: f32) -> f32 {
@@ -123,45 +124,55 @@ pub fn gaussian_blur(buf: &mut PixelBuffer, radius: u32) {
 
     let kernel = build_gaussian_kernel(radius);
     let (w, h) = buf.dimensions();
+    let w_usize = w as usize;
 
-    // Horizontal pass
+    // Horizontal pass — process rows in parallel
+    let src_pixels = buf.pixels().to_vec();
     let mut temp = PixelBuffer::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            let mut r = 0.0_f32;
-            let mut g = 0.0_f32;
-            let mut b = 0.0_f32;
-            let mut a = 0.0_f32;
-            for (i, &weight) in kernel.iter().enumerate() {
-                let sx = (x as i32 + i as i32 - radius as i32).clamp(0, w as i32 - 1) as u32;
-                let px = buf.get(sx, y).unwrap();
-                r += px.r * weight;
-                g += px.g * weight;
-                b += px.b * weight;
-                a += px.a * weight;
+    temp.pixels_mut()
+        .par_chunks_mut(w_usize)
+        .enumerate()
+        .for_each(|(y, temp_row)| {
+            let src_row_start = y * w_usize;
+            for (x, out) in temp_row.iter_mut().enumerate() {
+                let mut r = 0.0_f32;
+                let mut g = 0.0_f32;
+                let mut b = 0.0_f32;
+                let mut a = 0.0_f32;
+                for (i, &weight) in kernel.iter().enumerate() {
+                    let sx = (x as i32 + i as i32 - radius as i32).clamp(0, w as i32 - 1) as usize;
+                    let px = src_pixels[src_row_start + sx];
+                    r += px.r * weight;
+                    g += px.g * weight;
+                    b += px.b * weight;
+                    a += px.a * weight;
+                }
+                *out = Color::new(r, g, b, a);
             }
-            temp.set(x, y, Color::new(r, g, b, a));
-        }
-    }
+        });
 
-    // Vertical pass
-    for y in 0..h {
-        for x in 0..w {
-            let mut r = 0.0_f32;
-            let mut g = 0.0_f32;
-            let mut b = 0.0_f32;
-            let mut a = 0.0_f32;
-            for (i, &weight) in kernel.iter().enumerate() {
-                let sy = (y as i32 + i as i32 - radius as i32).clamp(0, h as i32 - 1) as u32;
-                let px = temp.get(x, sy).unwrap();
-                r += px.r * weight;
-                g += px.g * weight;
-                b += px.b * weight;
-                a += px.a * weight;
+    // Vertical pass — process rows in parallel
+    let temp_pixels = temp.pixels().to_vec();
+    buf.pixels_mut()
+        .par_chunks_mut(w_usize)
+        .enumerate()
+        .for_each(|(y, dst_row)| {
+            for (x, out) in dst_row.iter_mut().enumerate() {
+                let mut r = 0.0_f32;
+                let mut g = 0.0_f32;
+                let mut b = 0.0_f32;
+                let mut a = 0.0_f32;
+                for (i, &weight) in kernel.iter().enumerate() {
+                    let sy = (y as i32 + i as i32 - radius as i32).clamp(0, h as i32 - 1) as usize;
+                    let px = temp_pixels[sy * w_usize + x];
+                    r += px.r * weight;
+                    g += px.g * weight;
+                    b += px.b * weight;
+                    a += px.a * weight;
+                }
+                *out = Color::new(r, g, b, a);
             }
-            buf.set(x, y, Color::new(r, g, b, a));
-        }
-    }
+        });
 }
 
 fn build_gaussian_kernel(radius: u32) -> Vec<f32> {
@@ -194,31 +205,34 @@ pub fn sharpen(buf: &mut PixelBuffer, radius: u32, amount: f32) {
     gaussian_blur(&mut blurred, radius);
 
     let blur_pixels = blurred.pixels();
-    for (i, px) in buf.pixels_mut().iter_mut().enumerate() {
-        let blur = blur_pixels[i];
-        px.r = (px.r + amount * (px.r - blur.r)).clamp(0.0, 1.0);
-        px.g = (px.g + amount * (px.g - blur.g)).clamp(0.0, 1.0);
-        px.b = (px.b + amount * (px.b - blur.b)).clamp(0.0, 1.0);
-    }
+    buf.pixels_mut()
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(i, px)| {
+            let blur = blur_pixels[i];
+            px.r = (px.r + amount * (px.r - blur.r)).clamp(0.0, 1.0);
+            px.g = (px.g + amount * (px.g - blur.g)).clamp(0.0, 1.0);
+            px.b = (px.b + amount * (px.b - blur.b)).clamp(0.0, 1.0);
+        });
 }
 
 /// Invert all pixel colors (preserves alpha).
 pub fn invert(buf: &mut PixelBuffer) {
-    for px in buf.pixels_mut() {
+    buf.pixels_mut().par_iter_mut().for_each(|px| {
         px.r = 1.0 - px.r;
         px.g = 1.0 - px.g;
         px.b = 1.0 - px.b;
-    }
+    });
 }
 
 /// Convert to grayscale using luminance weights (preserves alpha).
 pub fn grayscale(buf: &mut PixelBuffer) {
-    for px in buf.pixels_mut() {
+    buf.pixels_mut().par_iter_mut().for_each(|px| {
         let lum = 0.2126 * px.r + 0.7152 * px.g + 0.0722 * px.b;
         px.r = lum;
         px.g = lum;
         px.b = lum;
-    }
+    });
 }
 
 #[cfg(test)]
@@ -423,6 +437,55 @@ mod tests {
         grayscale(&mut buf);
         let px = buf.get(0, 0).unwrap();
         assert!(approx_eq(px.r, 1.0)); // white stays white
+    }
+
+    // ── Adjustment dispatch ──
+
+    // ── Parallel correctness ──
+
+    #[test]
+    fn invert_parallel_correct() {
+        let mut buf = PixelBuffer::filled(64, 64, Color::new(0.25, 0.5, 0.75, 1.0));
+        invert(&mut buf);
+        for y in 0..64 {
+            for x in 0..64 {
+                let px = buf.get(x, y).unwrap();
+                assert!(approx_eq(px.r, 0.75), "r mismatch at ({x},{y})");
+                assert!(approx_eq(px.g, 0.5), "g mismatch at ({x},{y})");
+                assert!(approx_eq(px.b, 0.25), "b mismatch at ({x},{y})");
+                assert!(approx_eq(px.a, 1.0), "a mismatch at ({x},{y})");
+            }
+        }
+    }
+
+    #[test]
+    fn blur_parallel_correct() {
+        // Create a checkerboard and blur it — result should differ from input
+        let mut buf = PixelBuffer::new(16, 16);
+        for y in 0..16 {
+            for x in 0..16 {
+                let c = if (x + y) % 2 == 0 {
+                    Color::WHITE
+                } else {
+                    Color::BLACK
+                };
+                buf.set(x, y, c);
+            }
+        }
+        let original = buf.clone();
+        gaussian_blur(&mut buf, 2);
+        // At least one pixel should differ from the original
+        let mut differs = false;
+        for y in 0..16 {
+            for x in 0..16 {
+                let orig = original.get(x, y).unwrap();
+                let blurred = buf.get(x, y).unwrap();
+                if !approx_eq(orig.r, blurred.r) {
+                    differs = true;
+                }
+            }
+        }
+        assert!(differs, "blur should change checkerboard pixels");
     }
 
     // ── Adjustment dispatch ──

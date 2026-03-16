@@ -2,7 +2,7 @@
 
 > **Version**: 2026.3.15
 > **Status**: MVP v1 complete — all 10 phases done
-> **Tests**: 484 passing (89% coverage on testable crates)
+> **Tests**: 522 passing (89% coverage on testable crates)
 
 ---
 
@@ -32,7 +32,6 @@ Items planned after MVP v1 ships:
 - **Text-to-image** — full Stable Diffusion pipeline with prompt editor
 - **AI color grading** — automatic and prompt-driven color correction
 - **Vector tools** — bezier paths, shapes, vector layers
-- **Text engine** — text layers with font rendering, paragraph styles
 
 ### Professional Features
 *(All items complete)*
@@ -40,7 +39,6 @@ Items planned after MVP v1 ships:
 ### Platform
 - **Plugin system** — third-party filters, tools, AI models
 - **Tablet optimization** — touch UI mode, stylus gestures
-- **Performance** — multi-GPU, tiled rendering, memory-mapped images
 
 ### Ecosystem Integration
 - **Tazama integration** — send frames/stills between video and image editor

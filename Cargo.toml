@@ -19,6 +19,9 @@ repository = "https://github.com/agnostos/rasa"
 rust-version = "1.85"
 
 [workspace.dependencies]
+# Font rasterization
+ab_glyph = "0.2"
+
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
@@ -58,6 +61,9 @@ ash = "0.38"
 # GUI
 eframe = "0.31"
 egui = "0.31"
+
+# Parallelism
+rayon = "1"
 
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }

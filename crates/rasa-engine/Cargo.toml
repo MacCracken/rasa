@@ -9,6 +9,8 @@ license.workspace = true
 [dependencies]
 rasa-core = { workspace = true }
 rasa-gpu = { workspace = true }
+ab_glyph = { workspace = true }
+rayon = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 

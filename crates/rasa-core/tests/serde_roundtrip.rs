@@ -4,7 +4,7 @@ use rasa_core::color::{BlendMode, Color, ColorSpace};
 use rasa_core::command::Command;
 use rasa_core::document::Document;
 use rasa_core::geometry::{Point, Rect, Size};
-use rasa_core::layer::{Adjustment, Layer, LayerKind, TextLayer};
+use rasa_core::layer::{Adjustment, Layer, LayerKind, TextAlign, TextLayer};
 use rasa_core::selection::{Selection, SelectionOp};
 use rasa_core::transform::Transform;
 
@@ -270,6 +270,9 @@ fn roundtrip_layer_text() {
         content: "Hello".into(),
         font_family: "Inter".into(),
         font_size: 16.0,
+        color: Color::BLACK,
+        alignment: TextAlign::Center,
+        line_height: 1.4,
     });
     let json = serde_json::to_string(&layer).unwrap();
     let layer2: Layer = serde_json::from_str(&json).unwrap();
@@ -277,6 +280,9 @@ fn roundtrip_layer_text() {
         assert_eq!(text.content, "Hello");
         assert_eq!(text.font_family, "Inter");
         assert_eq!(text.font_size, 16.0);
+        assert_eq!(text.color, Color::BLACK);
+        assert_eq!(text.alignment, TextAlign::Center);
+        assert_eq!(text.line_height, 1.4);
     } else {
         panic!("expected Text");
     }

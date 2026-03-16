@@ -3,6 +3,7 @@ use rasa_core::blend::blend;
 use rasa_core::color::{BlendMode, Color};
 use rasa_core::layer::{Layer, LayerKind};
 use rasa_core::pixel::PixelBuffer;
+use rayon::prelude::*;
 
 use crate::filters;
 
@@ -37,6 +38,10 @@ fn composite_layer_tree(dst: &mut PixelBuffer, layer: &Layer, doc: &Document, w:
             // Adjustment layers modify the composited result below them
             filters::apply_adjustment(dst, adj);
         }
+        LayerKind::Text(text_layer) => {
+            let text_buf = crate::text::render_text_layer(text_layer, w, h);
+            composite_layer(dst, &text_buf, layer.blend_mode, layer.opacity);
+        }
         _ => {
             let Some(layer_buf) = doc.get_pixels(layer.id) else {
                 return;
@@ -47,6 +52,9 @@ fn composite_layer_tree(dst: &mut PixelBuffer, layer: &Layer, doc: &Document, w:
 }
 
 /// Composite a single layer buffer onto a destination buffer.
+///
+/// Rows are processed in parallel using rayon. The blend function is pure
+/// (no shared mutable state), so this is safe and deterministic.
 pub fn composite_layer(dst: &mut PixelBuffer, src: &PixelBuffer, mode: BlendMode, opacity: f32) {
     let w = dst.width.min(src.width) as usize;
     let h = dst.height.min(src.height) as usize;
@@ -55,15 +63,19 @@ pub fn composite_layer(dst: &mut PixelBuffer, src: &PixelBuffer, mode: BlendMode
     let dst_pixels = dst.pixels_mut();
     let src_pixels = src.pixels();
 
-    for y in 0..h {
-        let dst_row = y * dst_w;
-        let src_row = y * src_w;
-        for x in 0..w {
-            let base = dst_pixels[dst_row + x];
-            let top = src_pixels[src_row + x];
-            dst_pixels[dst_row + x] = blend(base, top, mode, opacity);
-        }
-    }
+    // Process rows in parallel
+    dst_pixels
+        .par_chunks_mut(dst_w)
+        .take(h)
+        .enumerate()
+        .for_each(|(y, dst_row)| {
+            let src_row_start = y * src_w;
+            for x in 0..w {
+                let base = dst_row[x];
+                let top = src_pixels[src_row_start + x];
+                dst_row[x] = blend(base, top, mode, opacity);
+            }
+        });
 }
 
 #[cfg(test)]
@@ -317,6 +329,61 @@ mod tests {
     }
 
     #[test]
+    fn composite_layer_parallel_matches_expected() {
+        // Composite two known buffers and verify pixel values match expected blend results.
+        let mut dst = PixelBuffer::filled(4, 4, Color::WHITE);
+        let src = PixelBuffer::filled(
+            4,
+            4,
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.5,
+            },
+        );
+        composite_layer(&mut dst, &src, BlendMode::Normal, 1.0);
+
+        // Expected: blend(white, half-transparent red, Normal, 1.0)
+        // top_a = 0.5 * 1.0 = 0.5
+        // out_a = 0.5 + 1.0 * 0.5 = 1.0
+        // out_r = (1.0 * 0.5 + 1.0 * 1.0 * 0.5) / 1.0 = 1.0
+        // out_g = (0.0 * 0.5 + 1.0 * 1.0 * 0.5) / 1.0 = 0.5
+        // out_b = (0.0 * 0.5 + 1.0 * 1.0 * 0.5) / 1.0 = 0.5
+        for y in 0..4 {
+            for x in 0..4 {
+                let px = dst.get(x, y).unwrap();
+                assert!(approx_eq(px.r, 1.0), "r mismatch at ({x},{y}): {}", px.r);
+                assert!(approx_eq(px.g, 0.5), "g mismatch at ({x},{y}): {}", px.g);
+                assert!(approx_eq(px.b, 0.5), "b mismatch at ({x},{y}): {}", px.b);
+                assert!(approx_eq(px.a, 1.0), "a mismatch at ({x},{y}): {}", px.a);
+            }
+        }
+    }
+
+    #[test]
+    fn composite_large_image() {
+        // Stress test: composite 1000x1000 image without panic
+        let mut dst = PixelBuffer::filled(1000, 1000, Color::WHITE);
+        let src = PixelBuffer::filled(
+            1000,
+            1000,
+            Color {
+                r: 0.0,
+                g: 0.0,
+                b: 1.0,
+                a: 0.5,
+            },
+        );
+        composite_layer(&mut dst, &src, BlendMode::Normal, 0.8);
+
+        // Spot-check a few pixels to make sure compositing ran
+        let px = dst.get(500, 500).unwrap();
+        assert!(px.b > 0.0);
+        assert!(px.a > 0.0);
+    }
+
+    #[test]
     fn composite_layer_direct() {
         let mut dst = PixelBuffer::filled(2, 2, Color::WHITE);
         let mut src = PixelBuffer::new(2, 2);
@@ -338,5 +405,44 @@ mod tests {
         let px10 = dst.get(1, 0).unwrap();
         assert!(approx_eq(px10.r, 1.0));
         assert!(approx_eq(px10.g, 1.0));
+    }
+
+    #[test]
+    fn composite_text_layer() {
+        use rasa_core::geometry::Rect;
+        use rasa_core::layer::{TextAlign, TextLayer};
+
+        let mut doc = Document::new("Test", 4, 4);
+        let text_layer = Layer {
+            id: uuid::Uuid::new_v4(),
+            name: "Title".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            bounds: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 4.0,
+                height: 4.0,
+            },
+            kind: LayerKind::Text(TextLayer {
+                content: "Hello".into(),
+                font_family: "Sans".into(),
+                font_size: 12.0,
+                color: Color::BLACK,
+                alignment: TextAlign::Left,
+                line_height: 1.2,
+            }),
+        };
+        doc.add_layer(text_layer);
+
+        // Should composite without panic. Text renders as transparent (no built-in
+        // font), so the result is just the white background.
+        let result = composite(&doc);
+        let px = result.get(0, 0).unwrap();
+        assert!(approx_eq(px.r, 1.0));
+        assert!(approx_eq(px.g, 1.0));
+        assert!(approx_eq(px.b, 1.0));
     }
 }
