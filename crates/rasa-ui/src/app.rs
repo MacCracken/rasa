@@ -68,7 +68,14 @@ impl RasaApp {
                         let composited = rasa_engine::compositor::composite(doc);
                         let format = rasa_storage::format::ImageFormat::from_path(&path);
                         if let Some(fmt) = format {
-                            let settings = rasa_storage::format::ExportSettings::for_format(fmt);
+                            let settings =
+                                match rasa_storage::format::ExportSettings::for_format(fmt) {
+                                    Ok(s) => s,
+                                    Err(e) => {
+                                        self.status_message = format!("Export error: {e}");
+                                        return;
+                                    }
+                                };
                             match rasa_storage::export::export_buffer(&composited, &path, &settings)
                             {
                                 Ok(()) => {

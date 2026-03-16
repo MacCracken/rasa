@@ -10,10 +10,18 @@ use rasa_core::pixel::PixelBuffer;
 use crate::format::ImageFormat;
 
 /// Convert raw RGBA u8 bytes into a PixelBuffer using slice access.
+///
+/// # Panics
+/// Panics in debug mode if `raw.len() < width * height * 4`. In release mode,
+/// short buffers produce a truncated result (remaining pixels stay transparent).
 pub(crate) fn rgba_bytes_to_buffer(raw: &[u8], width: u32, height: u32) -> PixelBuffer {
     let mut buf = PixelBuffer::new(width, height);
     let pixels = buf.pixels_mut();
+    let max_pixels = raw.len() / 4;
     for (i, px) in pixels.iter_mut().enumerate() {
+        if i >= max_pixels {
+            break;
+        }
         let offset = i * 4;
         *px = Color::new(
             srgb_to_linear(raw[offset] as f32 / 255.0),

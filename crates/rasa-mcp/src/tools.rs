@@ -505,14 +505,18 @@ fn tool_export(state: &SessionState, args: &Value) -> Result<Value, String> {
         rasa_storage::format::ImageFormat::Jpeg => rasa_storage::format::ExportSettings::Jpeg(
             rasa_storage::format::JpegQuality::new(quality),
         ),
-        _ => rasa_storage::format::ExportSettings::for_format(format),
+        _ => rasa_storage::format::ExportSettings::for_format(format).map_err(|e| e.to_string())?,
     };
 
-    // Composite the document and export
+    // Composite the document and export with ICC profile if available
     state
         .with_doc(doc_id, |d| {
             let composited = rasa_engine::compositor::composite(d);
-            rasa_storage::export::export_buffer(&composited, &path, &settings)
+            let config = rasa_storage::format::ExportConfig {
+                settings: settings.clone(),
+                icc_profile: d.icc_profile.clone(),
+            };
+            rasa_storage::export::export_buffer_with_config(&composited, &path, &config)
                 .map_err(|e| e.to_string())
         })
         .map_err(|e| e.to_string())??;
@@ -1433,5 +1437,130 @@ mod tests {
             }),
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn batch_export_format_conversion() {
+        let dir = std::env::temp_dir().join("rasa_test_mcp_batch_fmt");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input_path = dir.join("mcp_batch_fmt.png");
+        let buf = rasa_core::pixel::PixelBuffer::filled(
+            4,
+            4,
+            rasa_core::color::Color::new(1.0, 0.0, 0.0, 1.0),
+        );
+        rasa_storage::export::export_buffer(
+            &buf,
+            &input_path,
+            &rasa_storage::format::ExportSettings::Png,
+        )
+        .unwrap();
+
+        let output_dir = dir.join("mcp_batch_fmt_output");
+        let state = SessionState::new();
+        let result = call_tool(
+            &state,
+            "rasa_batch_export",
+            &json!({
+                "input_paths": [input_path.to_str().unwrap()],
+                "output_dir": output_dir.to_str().unwrap(),
+                "format": "jpeg",
+                "quality": 80,
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(result["total"], 1);
+        assert_eq!(result["succeeded"], 1);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn batch_export_with_filters() {
+        let dir = std::env::temp_dir().join("rasa_test_mcp_batch_filt");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input_path = dir.join("mcp_batch_filt.png");
+        let buf = rasa_core::pixel::PixelBuffer::filled(
+            4,
+            4,
+            rasa_core::color::Color::new(1.0, 0.0, 0.0, 1.0),
+        );
+        rasa_storage::export::export_buffer(
+            &buf,
+            &input_path,
+            &rasa_storage::format::ExportSettings::Png,
+        )
+        .unwrap();
+
+        let output_dir = dir.join("mcp_batch_filt_output");
+        let state = SessionState::new();
+        let result = call_tool(
+            &state,
+            "rasa_batch_export",
+            &json!({
+                "input_paths": [input_path.to_str().unwrap()],
+                "output_dir": output_dir.to_str().unwrap(),
+                "filters": [
+                    { "name": "invert" },
+                    { "name": "grayscale" }
+                ]
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(result["total"], 1);
+        assert_eq!(result["succeeded"], 1);
+        assert_eq!(result["failed"], 0);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn batch_export_invalid_filter_errors() {
+        let dir = std::env::temp_dir().join("rasa_test_mcp_batch_badfilt");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input_path = dir.join("mcp_batch_badfilt.png");
+        let buf = rasa_core::pixel::PixelBuffer::filled(4, 4, rasa_core::color::Color::WHITE);
+        rasa_storage::export::export_buffer(
+            &buf,
+            &input_path,
+            &rasa_storage::format::ExportSettings::Png,
+        )
+        .unwrap();
+
+        let output_dir = dir.join("mcp_batch_badfilt_output");
+        let state = SessionState::new();
+        let result = call_tool(
+            &state,
+            "rasa_batch_export",
+            &json!({
+                "input_paths": [input_path.to_str().unwrap()],
+                "output_dir": output_dir.to_str().unwrap(),
+                "filters": [
+                    { "name": "nonexistent_filter" }
+                ]
+            }),
+        );
+        assert!(result.is_err());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn batch_export_exceeds_limit() {
+        let state = SessionState::new();
+        let paths: Vec<String> = (0..1001).map(|i| format!("/fake/path_{i}.png")).collect();
+        let result = call_tool(
+            &state,
+            "rasa_batch_export",
+            &json!({
+                "input_paths": paths,
+                "output_dir": "/tmp/batch_limit_test",
+            }),
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("exceeds maximum"));
     }
 }

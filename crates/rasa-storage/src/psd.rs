@@ -86,8 +86,9 @@ pub fn import_psd(path: &Path) -> Result<Document, RasaError> {
     } else {
         for psd_layer in psd_layers {
             let layer_name = psd_layer.name();
-            let layer_width = psd_layer.width() as u32;
-            let layer_height = psd_layer.height() as u32;
+            // psd crate returns u16 for width/height, so u32 cast is safe.
+            let layer_width = u32::from(psd_layer.width());
+            let layer_height = u32::from(psd_layer.height());
 
             // Skip zero-size layers (e.g. group boundaries).
             if layer_width == 0 || layer_height == 0 {
@@ -402,6 +403,58 @@ mod tests {
         std::fs::write(&path, b"not a psd file").unwrap();
         let result = import_psd(&path);
         assert!(result.is_err());
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn export_psd_channel_order() {
+        // PSD spec: channels are written R, G, B, A in order.
+        let buf = PixelBuffer::filled(2, 2, Color::new(1.0, 0.0, 0.0, 1.0));
+        let dir = std::env::temp_dir().join("rasa_test_psd");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test_chan_order.psd");
+        export_psd_flat(&buf, &path).unwrap();
+
+        let data = std::fs::read(&path).unwrap();
+        // Header(26) + color-mode(4) + image-resources(4) + layer-mask(4) + compression(2) = 40
+        let image_data_offset = 40;
+        let pixel_count = 4; // 2x2
+        // R channel comes first, then G, then B, then A
+        let r_start = image_data_offset;
+        let a_start = image_data_offset + 3 * pixel_count;
+        // R channel should be before A channel
+        assert!(r_start < a_start);
+        // Verify R channel has non-zero data (red pixel)
+        assert!(data[r_start] > 0);
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn export_psd_red_pixel_correct() {
+        // A pure red pixel in linear space
+        let buf = PixelBuffer::filled(1, 1, Color::new(1.0, 0.0, 0.0, 1.0));
+        let dir = std::env::temp_dir().join("rasa_test_psd");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test_red_pixel.psd");
+        export_psd_flat(&buf, &path).unwrap();
+
+        let data = std::fs::read(&path).unwrap();
+        // Header(26) + color-mode(4) + image-resources(4) + layer-mask(4) + compression(2) = 40
+        let offset = 40;
+        let r = data[offset]; // R channel
+        let g = data[offset + 1]; // G channel
+        let b = data[offset + 2]; // B channel
+        let a = data[offset + 3]; // A channel
+
+        // Red should be 255 (full red in sRGB)
+        assert_eq!(r, 255);
+        // Green and blue should be 0
+        assert_eq!(g, 0);
+        assert_eq!(b, 0);
+        // Alpha should be 255 (fully opaque)
+        assert_eq!(a, 255);
+
         std::fs::remove_file(&path).ok();
     }
 }

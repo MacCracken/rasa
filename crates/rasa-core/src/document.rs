@@ -1335,4 +1335,16 @@ mod tests {
         let dup = doc.find_layer(dup_id).unwrap();
         assert!(matches!(dup.kind, LayerKind::Adjustment(_)));
     }
+
+    #[test]
+    fn new_document_has_srgb_color_space() {
+        let doc = Document::new("Test", 100, 100);
+        assert_eq!(doc.color_space, crate::color::ColorSpace::Srgb);
+    }
+
+    #[test]
+    fn new_document_has_no_icc_profile() {
+        let doc = Document::new("Test", 100, 100);
+        assert!(doc.icc_profile.is_none());
+    }
 }

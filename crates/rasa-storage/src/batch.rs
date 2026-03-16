@@ -146,7 +146,7 @@ impl BatchJob {
         // Export
         let settings = match output_format {
             ImageFormat::Jpeg => ExportSettings::Jpeg(JpegQuality::new(self.jpeg_quality)),
-            _ => ExportSettings::for_format(output_format),
+            _ => ExportSettings::for_format(output_format)?,
         };
 
         let config = ExportConfig {
@@ -383,6 +383,220 @@ mod tests {
 
         let result = job.run().unwrap();
         assert_eq!(result.succeeded, 1);
+
+        std::fs::remove_dir_all(&output_dir).ok();
+        std::fs::remove_file(&input).ok();
+    }
+
+    #[test]
+    fn batch_raw_format_rejected() {
+        let dir = std::env::temp_dir().join("rasa_test_batch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = create_test_png(&dir, "batch_raw_reject.png");
+        let output_dir = dir.join("output_raw_reject");
+
+        let job = BatchJob {
+            input_paths: vec![input.clone()],
+            output_dir: output_dir.clone(),
+            format: Some(ImageFormat::Raw),
+            jpeg_quality: 90,
+            filters: vec![],
+            icc_profile: None,
+        };
+
+        let result = job.run().unwrap();
+        assert_eq!(result.total, 1);
+        assert_eq!(result.succeeded, 0);
+        assert_eq!(result.failed, 1);
+        assert!(
+            result.results[0]
+                .error
+                .as_ref()
+                .unwrap()
+                .contains("not exportable")
+        );
+
+        std::fs::remove_dir_all(&output_dir).ok();
+        std::fs::remove_file(&input).ok();
+    }
+
+    #[test]
+    fn batch_to_webp() {
+        let dir = std::env::temp_dir().join("rasa_test_batch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = create_test_png(&dir, "batch_webp.png");
+        let output_dir = dir.join("output_webp");
+
+        let job = BatchJob {
+            input_paths: vec![input.clone()],
+            output_dir: output_dir.clone(),
+            format: Some(ImageFormat::WebP),
+            jpeg_quality: 90,
+            filters: vec![],
+            icc_profile: None,
+        };
+
+        let result = job.run().unwrap();
+        assert_eq!(result.succeeded, 1);
+        let output = result.results[0].output.as_ref().unwrap();
+        assert!(output.to_str().unwrap().ends_with(".webp"));
+        assert!(output.exists());
+
+        std::fs::remove_dir_all(&output_dir).ok();
+        std::fs::remove_file(&input).ok();
+    }
+
+    #[test]
+    fn batch_to_bmp() {
+        let dir = std::env::temp_dir().join("rasa_test_batch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = create_test_png(&dir, "batch_bmp.png");
+        let output_dir = dir.join("output_bmp");
+
+        let job = BatchJob {
+            input_paths: vec![input.clone()],
+            output_dir: output_dir.clone(),
+            format: Some(ImageFormat::Bmp),
+            jpeg_quality: 90,
+            filters: vec![],
+            icc_profile: None,
+        };
+
+        let result = job.run().unwrap();
+        assert_eq!(result.succeeded, 1);
+        let output = result.results[0].output.as_ref().unwrap();
+        assert!(output.to_str().unwrap().ends_with(".bmp"));
+        assert!(output.exists());
+
+        std::fs::remove_dir_all(&output_dir).ok();
+        std::fs::remove_file(&input).ok();
+    }
+
+    #[test]
+    fn batch_to_tiff() {
+        let dir = std::env::temp_dir().join("rasa_test_batch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = create_test_png(&dir, "batch_tiff.png");
+        let output_dir = dir.join("output_tiff");
+
+        let job = BatchJob {
+            input_paths: vec![input.clone()],
+            output_dir: output_dir.clone(),
+            format: Some(ImageFormat::Tiff),
+            jpeg_quality: 90,
+            filters: vec![],
+            icc_profile: None,
+        };
+
+        let result = job.run().unwrap();
+        assert_eq!(result.succeeded, 1);
+        let output = result.results[0].output.as_ref().unwrap();
+        assert!(output.to_str().unwrap().ends_with(".tiff"));
+        assert!(output.exists());
+
+        std::fs::remove_dir_all(&output_dir).ok();
+        std::fs::remove_file(&input).ok();
+    }
+
+    #[test]
+    fn batch_blur_filter() {
+        let dir = std::env::temp_dir().join("rasa_test_batch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = create_test_png(&dir, "batch_blur.png");
+        let output_dir = dir.join("output_blur");
+
+        let job = BatchJob {
+            input_paths: vec![input.clone()],
+            output_dir: output_dir.clone(),
+            format: None,
+            jpeg_quality: 90,
+            filters: vec![BatchFilter::GaussianBlur { radius: 2 }],
+            icc_profile: None,
+        };
+
+        let result = job.run().unwrap();
+        assert_eq!(result.succeeded, 1);
+        assert!(result.results[0].output.as_ref().unwrap().exists());
+
+        std::fs::remove_dir_all(&output_dir).ok();
+        std::fs::remove_file(&input).ok();
+    }
+
+    #[test]
+    fn batch_sharpen_filter() {
+        let dir = std::env::temp_dir().join("rasa_test_batch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = create_test_png(&dir, "batch_sharpen.png");
+        let output_dir = dir.join("output_sharpen");
+
+        let job = BatchJob {
+            input_paths: vec![input.clone()],
+            output_dir: output_dir.clone(),
+            format: None,
+            jpeg_quality: 90,
+            filters: vec![BatchFilter::Sharpen {
+                radius: 1,
+                amount: 0.5,
+            }],
+            icc_profile: None,
+        };
+
+        let result = job.run().unwrap();
+        assert_eq!(result.succeeded, 1);
+        assert!(result.results[0].output.as_ref().unwrap().exists());
+
+        std::fs::remove_dir_all(&output_dir).ok();
+        std::fs::remove_file(&input).ok();
+    }
+
+    #[test]
+    fn batch_hue_saturation_filter() {
+        let dir = std::env::temp_dir().join("rasa_test_batch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = create_test_png(&dir, "batch_huesat.png");
+        let output_dir = dir.join("output_huesat");
+
+        let job = BatchJob {
+            input_paths: vec![input.clone()],
+            output_dir: output_dir.clone(),
+            format: None,
+            jpeg_quality: 90,
+            filters: vec![BatchFilter::HueSaturation {
+                hue: 30.0,
+                saturation: 0.2,
+                lightness: 0.0,
+            }],
+            icc_profile: None,
+        };
+
+        let result = job.run().unwrap();
+        assert_eq!(result.succeeded, 1);
+        assert!(result.results[0].output.as_ref().unwrap().exists());
+
+        std::fs::remove_dir_all(&output_dir).ok();
+        std::fs::remove_file(&input).ok();
+    }
+
+    #[test]
+    fn batch_empty_filters() {
+        let dir = std::env::temp_dir().join("rasa_test_batch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = create_test_png(&dir, "batch_empty_filt.png");
+        let output_dir = dir.join("output_empty_filt");
+
+        let job = BatchJob {
+            input_paths: vec![input.clone()],
+            output_dir: output_dir.clone(),
+            format: None,
+            jpeg_quality: 90,
+            filters: vec![],
+            icc_profile: None,
+        };
+
+        let result = job.run().unwrap();
+        assert_eq!(result.succeeded, 1);
+        assert_eq!(result.failed, 0);
+        assert!(result.results[0].output.as_ref().unwrap().exists());
 
         std::fs::remove_dir_all(&output_dir).ok();
         std::fs::remove_file(&input).ok();

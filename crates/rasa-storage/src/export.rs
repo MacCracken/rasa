@@ -346,4 +346,68 @@ mod tests {
 
         std::fs::remove_file(&path).ok();
     }
+
+    #[test]
+    fn export_tiff_cmyk_white_is_zero_ink() {
+        let buf = PixelBuffer::filled(1, 1, Color::WHITE);
+        let dir = std::env::temp_dir().join("rasa_test_export");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test_cmyk_white.tiff");
+        export_buffer(&buf, &path, &ExportSettings::TiffCmyk).unwrap();
+
+        let data = std::fs::read(&path).unwrap();
+        // The CMYK pixel data is at the end of the file (last 4 bytes for a 1x1 image).
+        let pixel_data = &data[data.len() - 4..];
+        // White in CMYK = C=0, M=0, Y=0, K=0
+        assert_eq!(pixel_data, &[0, 0, 0, 0]);
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn export_with_icc_profile_jpeg() {
+        let buf = PixelBuffer::filled(4, 4, Color::WHITE);
+        let dir = std::env::temp_dir().join("rasa_test_export");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path_with = dir.join("test_icc_jpeg_with.jpg");
+        let path_without = dir.join("test_icc_jpeg_without.jpg");
+
+        let config = ExportConfig {
+            settings: ExportSettings::Jpeg(JpegQuality::new(85)),
+            icc_profile: Some(rasa_core::color::IccProfile::srgb_v2()),
+        };
+        export_buffer_with_config(&buf, &path_with, &config).unwrap();
+        export_buffer(
+            &buf,
+            &path_without,
+            &ExportSettings::Jpeg(JpegQuality::new(85)),
+        )
+        .unwrap();
+
+        let with_icc_size = std::fs::metadata(&path_with).unwrap().len();
+        let without_icc_size = std::fs::metadata(&path_without).unwrap().len();
+        assert!(with_icc_size > without_icc_size);
+
+        std::fs::remove_file(&path_with).ok();
+        std::fs::remove_file(&path_without).ok();
+    }
+
+    #[test]
+    fn export_with_icc_profile_tiff() {
+        let buf = PixelBuffer::filled(4, 4, Color::new(1.0, 0.0, 0.0, 1.0));
+        let dir = std::env::temp_dir().join("rasa_test_export");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test_icc_tiff.tiff");
+
+        let config = ExportConfig {
+            settings: ExportSettings::Tiff,
+            icc_profile: Some(rasa_core::color::IccProfile::srgb_v2()),
+        };
+        export_buffer_with_config(&buf, &path, &config).unwrap();
+        assert!(path.exists());
+        let metadata = std::fs::metadata(&path).unwrap();
+        assert!(metadata.len() > 0);
+
+        std::fs::remove_file(&path).ok();
+    }
 }

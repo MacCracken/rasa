@@ -99,18 +99,18 @@ pub struct ExportConfig {
 }
 
 impl ExportSettings {
-    pub fn for_format(format: ImageFormat) -> Self {
+    pub fn for_format(format: ImageFormat) -> Result<Self, rasa_core::error::RasaError> {
         match format {
-            ImageFormat::Png => Self::Png,
-            ImageFormat::Jpeg => Self::Jpeg(JpegQuality::default()),
-            ImageFormat::WebP => Self::WebP,
-            ImageFormat::Tiff => Self::Tiff,
-            ImageFormat::Bmp => Self::Bmp,
-            ImageFormat::Gif => Self::Gif,
-            ImageFormat::Psd => Self::Psd,
-            ImageFormat::Raw => {
-                panic!("RAW format is import-only, cannot export")
-            }
+            ImageFormat::Png => Ok(Self::Png),
+            ImageFormat::Jpeg => Ok(Self::Jpeg(JpegQuality::default())),
+            ImageFormat::WebP => Ok(Self::WebP),
+            ImageFormat::Tiff => Ok(Self::Tiff),
+            ImageFormat::Bmp => Ok(Self::Bmp),
+            ImageFormat::Gif => Ok(Self::Gif),
+            ImageFormat::Psd => Ok(Self::Psd),
+            ImageFormat::Raw => Err(rasa_core::error::RasaError::UnsupportedFormat(
+                "RAW format is import-only".into(),
+            )),
         }
     }
 
@@ -216,17 +216,17 @@ mod tests {
 
     #[test]
     fn export_settings_for_format() {
-        let s = ExportSettings::for_format(ImageFormat::Png);
+        let s = ExportSettings::for_format(ImageFormat::Png).unwrap();
         assert_eq!(s.format(), ImageFormat::Png);
-        let s = ExportSettings::for_format(ImageFormat::Jpeg);
+        let s = ExportSettings::for_format(ImageFormat::Jpeg).unwrap();
         assert_eq!(s.format(), ImageFormat::Jpeg);
-        let s = ExportSettings::for_format(ImageFormat::WebP);
+        let s = ExportSettings::for_format(ImageFormat::WebP).unwrap();
         assert_eq!(s.format(), ImageFormat::WebP);
-        let s = ExportSettings::for_format(ImageFormat::Tiff);
+        let s = ExportSettings::for_format(ImageFormat::Tiff).unwrap();
         assert_eq!(s.format(), ImageFormat::Tiff);
-        let s = ExportSettings::for_format(ImageFormat::Bmp);
+        let s = ExportSettings::for_format(ImageFormat::Bmp).unwrap();
         assert_eq!(s.format(), ImageFormat::Bmp);
-        let s = ExportSettings::for_format(ImageFormat::Gif);
+        let s = ExportSettings::for_format(ImageFormat::Gif).unwrap();
         assert_eq!(s.format(), ImageFormat::Gif);
     }
 
@@ -321,13 +321,13 @@ mod tests {
 
     #[test]
     fn export_settings_psd() {
-        let s = ExportSettings::for_format(ImageFormat::Psd);
+        let s = ExportSettings::for_format(ImageFormat::Psd).unwrap();
         assert_eq!(s.format(), ImageFormat::Psd);
     }
 
     #[test]
-    #[should_panic(expected = "RAW format is import-only")]
-    fn export_settings_raw_panics() {
-        ExportSettings::for_format(ImageFormat::Raw);
+    fn export_settings_raw_errors() {
+        let result = ExportSettings::for_format(ImageFormat::Raw);
+        assert!(result.is_err());
     }
 }

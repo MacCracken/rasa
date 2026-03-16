@@ -490,4 +490,46 @@ mod tests {
         assert!(approx_eq(g, 0.0));
         assert!(approx_eq(b, 0.0));
     }
+
+    #[test]
+    fn cmyk_mid_gray() {
+        let cmyk = rgb_to_cmyk_naive(0.5, 0.5, 0.5);
+        // For mid gray, C=M=Y=0, K=0.5
+        assert!(approx_eq(cmyk.c, 0.0));
+        assert!(approx_eq(cmyk.m, 0.0));
+        assert!(approx_eq(cmyk.y, 0.0));
+        assert!(approx_eq(cmyk.k, 0.5));
+    }
+
+    #[test]
+    fn cmyk_pure_green() {
+        let cmyk = rgb_to_cmyk_naive(0.0, 1.0, 0.0);
+        // Pure green: C=1, M=0, Y=1, K=0
+        assert!(approx_eq(cmyk.c, 1.0));
+        assert!(approx_eq(cmyk.m, 0.0));
+        assert!(approx_eq(cmyk.y, 1.0));
+        assert!(approx_eq(cmyk.k, 0.0));
+    }
+
+    #[test]
+    fn cmyk_pure_blue() {
+        let cmyk = rgb_to_cmyk_naive(0.0, 0.0, 1.0);
+        // Pure blue: C=1, M=1, Y=0, K=0
+        assert!(approx_eq(cmyk.c, 1.0));
+        assert!(approx_eq(cmyk.m, 1.0));
+        assert!(approx_eq(cmyk.y, 0.0));
+        assert!(approx_eq(cmyk.k, 0.0));
+    }
+
+    #[test]
+    fn color_space_default_is_srgb() {
+        assert_eq!(ColorSpace::default(), ColorSpace::Srgb);
+    }
+
+    #[test]
+    fn color_space_cmyk_variant() {
+        let cmyk = ColorSpace::Cmyk;
+        let srgb = ColorSpace::Srgb;
+        assert_ne!(cmyk, srgb);
+    }
 }
