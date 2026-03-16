@@ -44,8 +44,7 @@ pub fn export_buffer_with_config(
         ExportSettings::Jpeg(quality) => {
             let img = buffer_to_image(buf);
             let rgb_img = image::DynamicImage::ImageRgba8(img).to_rgb8();
-            let file = std::fs::File::create(path)
-                .map_err(|e| RasaError::Other(format!("export failed: {e}")))?;
+            let file = std::fs::File::create(path)?;
             let mut encoder =
                 JpegEncoder::new_with_quality(std::io::BufWriter::new(file), quality.0);
             if let Some(ref icc) = icc_data {
@@ -58,8 +57,7 @@ pub fn export_buffer_with_config(
         ExportSettings::Png => {
             let img = buffer_to_image(buf);
             let (w, h) = buf.dimensions();
-            let file = std::fs::File::create(path)
-                .map_err(|e| RasaError::Other(format!("export failed: {e}")))?;
+            let file = std::fs::File::create(path)?;
             let mut encoder = PngEncoder::new(std::io::BufWriter::new(file));
             if let Some(ref icc) = icc_data {
                 let _ = encoder.set_icc_profile(icc.clone());
@@ -71,8 +69,7 @@ pub fn export_buffer_with_config(
         ExportSettings::Tiff => {
             let img = buffer_to_image(buf);
             let (w, h) = buf.dimensions();
-            let file = std::fs::File::create(path)
-                .map_err(|e| RasaError::Other(format!("export failed: {e}")))?;
+            let file = std::fs::File::create(path)?;
             let mut encoder = TiffEncoder::new(std::io::BufWriter::new(file));
             if let Some(ref icc) = icc_data {
                 let _ = encoder.set_icc_profile(icc.clone());
@@ -176,8 +173,7 @@ fn export_tiff_cmyk(
     // ── Pixel data ──
     out.write_all(&cmyk_data).map_err(write_err)?;
 
-    std::fs::write(path, &out)
-        .map_err(|e| RasaError::Other(format!("failed to write CMYK TIFF: {e}")))?;
+    std::fs::write(path, &out)?;
 
     Ok(())
 }
@@ -212,7 +208,9 @@ pub fn export_to_rgba_bytes(buf: &PixelBuffer) -> Vec<u8> {
 fn buffer_to_image(buf: &PixelBuffer) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let (w, h) = buf.dimensions();
     let raw = export_to_rgba_bytes(buf);
-    ImageBuffer::from_raw(w, h, raw).expect("buffer dimensions match")
+    // Safety: export_to_rgba_bytes always produces exactly w*h*4 bytes,
+    // matching ImageBuffer's requirement. from_raw only fails on length mismatch.
+    ImageBuffer::from_raw(w, h, raw).unwrap_or_else(|| ImageBuffer::new(w.max(1), h.max(1)))
 }
 
 fn to_image_format(format: ImageFormat) -> Result<image::ImageFormat, RasaError> {

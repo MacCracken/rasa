@@ -52,11 +52,10 @@ fn rasa_blend_mode_to_psd(mode: BlendMode) -> &'static [u8; 4] {
 
 /// Import a PSD file as a multi-layer Document.
 pub fn import_psd(path: &Path) -> Result<Document, RasaError> {
-    let bytes =
-        std::fs::read(path).map_err(|e| RasaError::Other(format!("failed to read PSD: {e}")))?;
+    let bytes = std::fs::read(path)?;
 
     let psd = psd::Psd::from_bytes(&bytes)
-        .map_err(|e| RasaError::Other(format!("failed to parse PSD: {e}")))?;
+        .map_err(|e| RasaError::CorruptFile(format!("invalid PSD: {e}")))?;
 
     let width = psd.width();
     let height = psd.height();
@@ -195,8 +194,7 @@ pub fn export_psd_flat(buf: &PixelBuffer, path: &Path) -> Result<(), RasaError> 
     out.write_all(&b_chan).map_err(write_err)?;
     out.write_all(&a_chan).map_err(write_err)?;
 
-    std::fs::write(path, &out)
-        .map_err(|e| RasaError::Other(format!("failed to write PSD: {e}")))?;
+    std::fs::write(path, &out)?;
 
     Ok(())
 }

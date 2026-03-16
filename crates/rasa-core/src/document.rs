@@ -319,8 +319,12 @@ impl Document {
         let h = lower_h.min(upper_buf.height);
         for y in 0..h {
             for x in 0..w {
-                let base = lower_buf.get(x, y).unwrap();
-                let top = upper_buf.get(x, y).unwrap();
+                let Some(base) = lower_buf.get(x, y) else {
+                    continue;
+                };
+                let Some(top) = upper_buf.get(x, y) else {
+                    continue;
+                };
                 let result =
                     crate::blend::blend(base, top, upper_layer.blend_mode, upper_layer.opacity);
                 lower_buf.set(x, y, result);

@@ -66,8 +66,7 @@ impl BatchJob {
     /// Process all input files sequentially.
     pub fn run(&self) -> Result<BatchResult, RasaError> {
         if !self.output_dir.is_dir() {
-            std::fs::create_dir_all(&self.output_dir)
-                .map_err(|e| RasaError::Other(format!("cannot create output dir: {e}")))?;
+            std::fs::create_dir_all(&self.output_dir)?;
         }
 
         let total = self.input_paths.len();
@@ -128,7 +127,7 @@ impl BatchJob {
             .unwrap_or_else(|| ImageFormat::from_path(input_path).unwrap_or(ImageFormat::Png));
 
         if !output_format.is_exportable() {
-            return Err(RasaError::Other(format!(
+            return Err(RasaError::UnsupportedFormat(format!(
                 "{:?} is not exportable",
                 output_format
             )));
