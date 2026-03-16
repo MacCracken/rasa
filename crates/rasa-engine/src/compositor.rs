@@ -42,6 +42,10 @@ fn composite_layer_tree(dst: &mut PixelBuffer, layer: &Layer, doc: &Document, w:
             let text_buf = crate::text::render_text_layer(text_layer, w, h);
             composite_layer(dst, &text_buf, layer.blend_mode, layer.opacity);
         }
+        LayerKind::Vector(vector_data) => {
+            let vec_buf = crate::vector::render_vector_layer(vector_data, w, h);
+            composite_layer(dst, &vec_buf, layer.blend_mode, layer.opacity);
+        }
         _ => {
             let Some(layer_buf) = doc.get_pixels(layer.id) else {
                 return;
@@ -405,6 +409,45 @@ mod tests {
         let px10 = dst.get(1, 0).unwrap();
         assert!(approx_eq(px10.r, 1.0));
         assert!(approx_eq(px10.g, 1.0));
+    }
+
+    #[test]
+    fn composite_vector_layer() {
+        use rasa_core::geometry::Rect;
+        use rasa_core::vector::{FillStyle, VectorData, VectorPath};
+
+        let mut doc = Document::new("Test", 10, 10);
+        let mut vdata = VectorData::new();
+        vdata.add_path(VectorPath::rect(
+            2.0,
+            2.0,
+            6.0,
+            6.0,
+            Some(FillStyle::Solid(Color::new(1.0, 0.0, 0.0, 1.0))),
+            None,
+        ));
+        let vec_layer = Layer {
+            id: uuid::Uuid::new_v4(),
+            name: "Vector".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            bounds: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 10.0,
+                height: 10.0,
+            },
+            kind: LayerKind::Vector(vdata),
+        };
+        doc.add_layer(vec_layer);
+
+        // Should composite without panic and produce non-white pixels.
+        let result = composite(&doc);
+        let center = result.get(5, 5).unwrap();
+        // Center should have red from the vector rect.
+        assert!(center.r > 0.5, "center should have red from vector rect");
     }
 
     #[test]

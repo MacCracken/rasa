@@ -2,7 +2,7 @@
 
 > **Version**: 2026.3.15
 > **Status**: MVP v1 complete — all 10 phases done
-> **Tests**: 522 passing (89% coverage on testable crates)
+> **Tests**: 556 passing (89% coverage on testable crates)
 
 ---
 
@@ -28,10 +28,7 @@
 Items planned after MVP v1 ships:
 
 ### Creative Expansion
-- **Style transfer** — apply artistic styles to images or selections
-- **Text-to-image** — full Stable Diffusion pipeline with prompt editor
-- **AI color grading** — automatic and prompt-driven color correction
-- **Vector tools** — bezier paths, shapes, vector layers
+*(All items complete)*
 
 ### Professional Features
 *(All items complete)*

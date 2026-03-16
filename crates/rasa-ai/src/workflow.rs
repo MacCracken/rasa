@@ -171,6 +171,64 @@ pub async fn generative_fill(
     Ok(())
 }
 
+/// Apply style transfer to a layer.
+/// Creates a new layer with the stylized result.
+pub async fn style_transfer(
+    pipeline: &AiPipeline,
+    doc: &mut Document,
+    layer_id: Uuid,
+    style: &str,
+    strength: f32,
+    model: Option<ModelId>,
+    on_progress: Option<ProgressCallback>,
+) -> Result<Uuid, RasaError> {
+    let input = doc
+        .get_pixels(layer_id)
+        .ok_or(RasaError::LayerNotFound(layer_id))?
+        .clone();
+
+    let model = model.unwrap_or_else(crate::models::presets::style_transfer_default);
+    let request = AiRequest::StyleTransfer {
+        model,
+        style: style.to_string(),
+        strength,
+    };
+
+    let result = pipeline.run(&request, &input, on_progress).await?;
+    let name = format!("Style: {}", truncate(style, 20));
+    let new_id = apply::apply_as_new_layer(doc, &result, name)?;
+    Ok(new_id)
+}
+
+/// Apply AI color grading to a layer.
+/// Creates a new layer with the color-graded result.
+pub async fn color_grade_layer(
+    pipeline: &AiPipeline,
+    doc: &mut Document,
+    layer_id: Uuid,
+    preset: &str,
+    intensity: f32,
+    model: Option<ModelId>,
+    on_progress: Option<ProgressCallback>,
+) -> Result<Uuid, RasaError> {
+    let input = doc
+        .get_pixels(layer_id)
+        .ok_or(RasaError::LayerNotFound(layer_id))?
+        .clone();
+
+    let model = model.unwrap_or_else(crate::models::presets::color_grading_default);
+    let request = AiRequest::ColorGrade {
+        model,
+        preset: preset.to_string(),
+        intensity,
+    };
+
+    let result = pipeline.run(&request, &input, on_progress).await?;
+    let name = format!("Grade: {}", truncate(preset, 20));
+    let new_id = apply::apply_as_new_layer(doc, &result, name)?;
+    Ok(new_id)
+}
+
 fn truncate(s: &str, max: usize) -> &str {
     if s.len() <= max {
         s

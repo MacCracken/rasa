@@ -194,6 +194,48 @@ impl SynapseClient {
             .map_err(|e| RasaError::InferenceFailed(format!("failed to read response: {e}")))
     }
 
+    /// Style transfer: send image + style parameters, get stylized image back.
+    pub async fn style_transfer(
+        &self,
+        image_png: &[u8],
+        style: &str,
+        strength: f32,
+    ) -> Result<Vec<u8>, RasaError> {
+        let url = format!("{}/v1/images/style-transfer", self.base_url);
+        let form = reqwest::multipart::Form::new()
+            .text("style", style.to_string())
+            .text("strength", strength.to_string())
+            .part(
+                "image",
+                reqwest::multipart::Part::bytes(image_png.to_vec())
+                    .file_name("input.png")
+                    .mime_str("image/png")
+                    .unwrap(),
+            );
+        self.post_multipart_image(&url, form).await
+    }
+
+    /// Color grading: send image + preset parameters, get color-graded image back.
+    pub async fn color_grade(
+        &self,
+        image_png: &[u8],
+        preset: &str,
+        intensity: f32,
+    ) -> Result<Vec<u8>, RasaError> {
+        let url = format!("{}/v1/images/color-grade", self.base_url);
+        let form = reqwest::multipart::Form::new()
+            .text("preset", preset.to_string())
+            .text("intensity", intensity.to_string())
+            .part(
+                "image",
+                reqwest::multipart::Part::bytes(image_png.to_vec())
+                    .file_name("input.png")
+                    .mime_str("image/png")
+                    .unwrap(),
+            );
+        self.post_multipart_image(&url, form).await
+    }
+
     /// Background removal: send image, get image with transparent background.
     pub async fn remove_background(
         &self,

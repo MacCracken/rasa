@@ -37,6 +37,8 @@ pub enum ModelKind {
     Segmentation,
     TextToImage,
     BackgroundRemoval,
+    StyleTransfer,
+    ColorGrading,
 }
 
 /// Well-known model presets.
@@ -61,6 +63,14 @@ pub mod presets {
 
     pub fn rembg_u2net() -> ModelId {
         ModelId::new("u2net")
+    }
+
+    pub fn style_transfer_default() -> ModelId {
+        ModelId::new("style-transfer-v1")
+    }
+
+    pub fn color_grading_default() -> ModelId {
+        ModelId::new("color-grading-v1")
     }
 }
 
@@ -97,6 +107,34 @@ mod tests {
     fn model_kind_serialize() {
         let json = serde_json::to_string(&ModelKind::Upscaling).unwrap();
         assert_eq!(json, "\"Upscaling\"");
+    }
+
+    #[test]
+    fn style_transfer_model_kind() {
+        let json = serde_json::to_string(&ModelKind::StyleTransfer).unwrap();
+        assert_eq!(json, "\"StyleTransfer\"");
+        let back: ModelKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ModelKind::StyleTransfer);
+    }
+
+    #[test]
+    fn color_grading_model_kind() {
+        let json = serde_json::to_string(&ModelKind::ColorGrading).unwrap();
+        assert_eq!(json, "\"ColorGrading\"");
+        let back: ModelKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ModelKind::ColorGrading);
+    }
+
+    #[test]
+    fn style_transfer_preset() {
+        let id = presets::style_transfer_default();
+        assert_eq!(id.0, "style-transfer-v1");
+    }
+
+    #[test]
+    fn color_grading_preset() {
+        let id = presets::color_grading_default();
+        assert_eq!(id.0, "color-grading-v1");
     }
 
     #[test]

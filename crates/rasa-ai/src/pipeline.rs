@@ -40,6 +40,8 @@ pub enum TaskKind {
     Segment,
     Generate,
     RemoveBackground,
+    StyleTransfer,
+    ColorGrade,
 }
 
 /// Parameters for an AI operation.
@@ -69,6 +71,16 @@ pub enum AiRequest {
     },
     RemoveBackground {
         model: ModelId,
+    },
+    StyleTransfer {
+        model: ModelId,
+        style: String,
+        strength: f32,
+    },
+    ColorGrade {
+        model: ModelId,
+        preset: String,
+        intensity: f32,
     },
 }
 
@@ -120,6 +132,8 @@ impl AiPipeline {
             AiRequest::Segment { .. } => TaskKind::Segment,
             AiRequest::Generate { .. } => TaskKind::Generate,
             AiRequest::RemoveBackground { .. } => TaskKind::RemoveBackground,
+            AiRequest::StyleTransfer { .. } => TaskKind::StyleTransfer,
+            AiRequest::ColorGrade { .. } => TaskKind::ColorGrade,
         };
 
         // Register active task
@@ -215,6 +229,34 @@ impl AiPipeline {
             }
             AiRequest::RemoveBackground { model } => {
                 let response = self.client.remove_background(&input_bytes, model).await?;
+                if let Some(ref cb) = on_progress {
+                    cb(0.8);
+                }
+                postprocess_image(&response)?
+            }
+            AiRequest::StyleTransfer {
+                model: _,
+                style,
+                strength,
+            } => {
+                let response = self
+                    .client
+                    .style_transfer(&input_bytes, style, *strength)
+                    .await?;
+                if let Some(ref cb) = on_progress {
+                    cb(0.8);
+                }
+                postprocess_image(&response)?
+            }
+            AiRequest::ColorGrade {
+                model: _,
+                preset,
+                intensity,
+            } => {
+                let response = self
+                    .client
+                    .color_grade(&input_bytes, preset, *intensity)
+                    .await?;
                 if let Some(ref cb) = on_progress {
                     cb(0.8);
                 }
@@ -345,6 +387,38 @@ mod tests {
     fn postprocess_invalid_data() {
         let result = postprocess_image(b"not an image");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn style_transfer_request_serializes() {
+        let request = AiRequest::StyleTransfer {
+            model: ModelId::new("style-transfer-v1"),
+            style: "oil-painting".into(),
+            strength: 0.8,
+        };
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("StyleTransfer"));
+        assert!(json.contains("oil-painting"));
+    }
+
+    #[test]
+    fn color_grade_request_serializes() {
+        let request = AiRequest::ColorGrade {
+            model: ModelId::new("color-grading-v1"),
+            preset: "cinematic-warm".into(),
+            intensity: 0.6,
+        };
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("ColorGrade"));
+        assert!(json.contains("cinematic-warm"));
+    }
+
+    #[test]
+    fn task_kind_new_variants_serialize() {
+        let st = serde_json::to_string(&TaskKind::StyleTransfer).unwrap();
+        assert_eq!(st, "\"StyleTransfer\"");
+        let cg = serde_json::to_string(&TaskKind::ColorGrade).unwrap();
+        assert_eq!(cg, "\"ColorGrade\"");
     }
 
     #[tokio::test]

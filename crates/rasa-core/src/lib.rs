@@ -8,6 +8,7 @@ pub mod layer;
 pub mod pixel;
 pub mod selection;
 pub mod transform;
+pub mod vector;
 
 pub use document::Document;
 pub use error::RasaError;

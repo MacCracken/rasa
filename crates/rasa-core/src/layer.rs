@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use crate::color::{BlendMode, Color};
 use crate::geometry::Rect;
+use crate::vector::VectorData;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Layer {
@@ -19,7 +20,7 @@ pub struct Layer {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LayerKind {
     Raster { width: u32, height: u32 },
-    Vector,
+    Vector(VectorData),
     Group { children: Vec<Layer> },
     Adjustment(Adjustment),
     Text(TextLayer),
@@ -103,6 +104,24 @@ impl Layer {
                 height: doc_size.1 as f64,
             },
             kind: LayerKind::Adjustment(adjustment),
+        }
+    }
+
+    pub fn new_vector(name: impl Into<String>, data: VectorData, doc_size: (u32, u32)) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name: name.into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+            blend_mode: BlendMode::default(),
+            bounds: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: doc_size.0 as f64,
+                height: doc_size.1 as f64,
+            },
+            kind: LayerKind::Vector(data),
         }
     }
 }

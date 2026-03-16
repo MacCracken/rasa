@@ -7,6 +7,7 @@ use rasa_core::geometry::{Point, Rect, Size};
 use rasa_core::layer::{Adjustment, Layer, LayerKind, TextAlign, TextLayer};
 use rasa_core::selection::{Selection, SelectionOp};
 use rasa_core::transform::Transform;
+use rasa_core::vector::VectorData;
 
 /// Serialize to JSON and back, asserting the round-trip produces an equal value.
 fn roundtrip<T>(value: &T) -> T
@@ -219,10 +220,10 @@ fn roundtrip_layer_raster() {
 #[test]
 fn roundtrip_layer_vector() {
     let mut layer = Layer::new_raster("Vector", 100, 100);
-    layer.kind = LayerKind::Vector;
+    layer.kind = LayerKind::Vector(VectorData::new());
     let json = serde_json::to_string(&layer).unwrap();
     let layer2: Layer = serde_json::from_str(&json).unwrap();
-    assert!(matches!(layer2.kind, LayerKind::Vector));
+    assert!(matches!(layer2.kind, LayerKind::Vector(_)));
 }
 
 #[test]
