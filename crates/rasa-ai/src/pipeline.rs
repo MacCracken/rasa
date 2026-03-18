@@ -8,6 +8,7 @@ use tokio::sync::Mutex;
 
 use crate::client::SynapseClient;
 use crate::models::ModelId;
+use crate::registry::ProviderRegistry;
 
 /// The central AI inference pipeline.
 ///
@@ -15,6 +16,7 @@ use crate::models::ModelId;
 /// for all AI features (inpainting, upscaling, segmentation, generation).
 pub struct AiPipeline {
     client: Arc<SynapseClient>,
+    registry: Arc<ProviderRegistry>,
     state: Arc<Mutex<PipelineState>>,
 }
 
@@ -102,10 +104,29 @@ pub type ProgressCallback = Box<dyn Fn(f32) + Send + Sync>;
 
 impl AiPipeline {
     pub fn new(synapse_url: &str) -> Self {
+        let mut registry = ProviderRegistry::new();
+        registry.register(Box::new(crate::provider_synapse::SynapseProvider::new(
+            synapse_url,
+        )));
         Self {
             client: Arc::new(SynapseClient::new(synapse_url)),
+            registry: Arc::new(registry),
             state: Arc::new(Mutex::new(PipelineState { active_task: None })),
         }
+    }
+
+    /// Create a pipeline with a custom provider registry.
+    pub fn with_registry(synapse_url: &str, registry: ProviderRegistry) -> Self {
+        Self {
+            client: Arc::new(SynapseClient::new(synapse_url)),
+            registry: Arc::new(registry),
+            state: Arc::new(Mutex::new(PipelineState { active_task: None })),
+        }
+    }
+
+    /// Access the provider registry.
+    pub fn registry(&self) -> &ProviderRegistry {
+        &self.registry
     }
 
     /// Check if the AI backend (hoosh/Synapse) is reachable.
@@ -239,8 +260,11 @@ impl AiPipeline {
                 style,
                 strength,
             } => {
-                let response = self
-                    .client
+                let provider = self
+                    .registry
+                    .default_provider()
+                    .ok_or_else(|| RasaError::Other("no AI provider available".into()))?;
+                let response = provider
                     .style_transfer(&input_bytes, style, *strength)
                     .await?;
                 if let Some(ref cb) = on_progress {
@@ -253,8 +277,11 @@ impl AiPipeline {
                 preset,
                 intensity,
             } => {
-                let response = self
-                    .client
+                let provider = self
+                    .registry
+                    .default_provider()
+                    .ok_or_else(|| RasaError::Other("no AI provider available".into()))?;
+                let response = provider
                     .color_grade(&input_bytes, preset, *intensity)
                     .await?;
                 if let Some(ref cb) = on_progress {
@@ -425,5 +452,34 @@ mod tests {
     async fn pipeline_not_busy_initially() {
         let pipeline = AiPipeline::new("http://localhost:8090");
         assert!(!pipeline.is_busy().await);
+    }
+
+    #[test]
+    fn pipeline_new_has_default_provider() {
+        let pipeline = AiPipeline::new("http://localhost:8090");
+        assert!(!pipeline.registry().is_empty());
+        assert_eq!(pipeline.registry().len(), 1);
+        assert!(pipeline.registry().default_provider().is_some());
+    }
+
+    #[test]
+    fn pipeline_with_registry() {
+        let mut reg = crate::registry::ProviderRegistry::new();
+        reg.register(Box::new(crate::provider_synapse::SynapseProvider::new(
+            "http://localhost:9000",
+        )));
+        let pipeline = AiPipeline::with_registry("http://localhost:8090", reg);
+        assert_eq!(pipeline.registry().len(), 1);
+        assert_eq!(
+            pipeline.registry().list_providers(),
+            vec!["Synapse (Local)"]
+        );
+    }
+
+    #[test]
+    fn pipeline_with_empty_registry() {
+        let reg = crate::registry::ProviderRegistry::new();
+        let pipeline = AiPipeline::with_registry("http://localhost:8090", reg);
+        assert!(pipeline.registry().is_empty());
     }
 }

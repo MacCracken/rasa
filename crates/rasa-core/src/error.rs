@@ -71,6 +71,9 @@ pub enum RasaError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("plugin error: {0}")]
+    PluginError(String),
+
     #[error("{0}")]
     Other(String),
 }
@@ -194,6 +197,12 @@ mod tests {
     fn error_display_invalid_selection() {
         let e = RasaError::InvalidSelection("empty polygon".into());
         assert!(e.to_string().contains("empty polygon"));
+    }
+
+    #[test]
+    fn error_display_plugin_error() {
+        let e = RasaError::PluginError("failed to load plugin".into());
+        assert_eq!(e.to_string(), "plugin error: failed to load plugin");
     }
 
     #[test]

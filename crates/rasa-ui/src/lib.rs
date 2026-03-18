@@ -1,6 +1,9 @@
 pub mod app;
 pub mod canvas;
 pub mod panels;
+pub mod plugin;
+pub mod tool;
+pub mod tool_builtins;
 pub mod tools;
 
 /// Launch the Rasa desktop application.

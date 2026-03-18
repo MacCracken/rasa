@@ -4,8 +4,12 @@ use egui;
 use rasa_core::Document;
 use rasa_core::layer::Layer;
 
+use rasa_engine::filter::FilterRegistry;
+
 use crate::canvas::CanvasState;
 use crate::panels;
+use crate::plugin::{PluginContext, PluginManager};
+use crate::tool::ToolRegistry;
 use crate::tools::ActiveTool;
 
 /// Main application state.
@@ -20,10 +24,35 @@ pub struct RasaApp {
     pub show_pixel_grid: bool,
     pub show_rulers: bool,
     pub status_message: String,
+    pub filter_registry: FilterRegistry,
+    pub tool_registry: ToolRegistry,
+    pub plugin_manager: PluginManager,
 }
 
 impl RasaApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+        let mut filter_registry = FilterRegistry::new();
+        rasa_engine::filter_builtins::register_builtins(&mut filter_registry);
+
+        let mut tool_registry = ToolRegistry::new();
+        crate::tool_builtins::register_builtins(&mut tool_registry);
+
+        let mut providers = rasa_ai::registry::ProviderRegistry::new();
+        providers.register(Box::new(rasa_ai::provider_synapse::SynapseProvider::new(
+            "http://localhost:8090",
+        )));
+
+        let plugin_manager = PluginManager::new();
+        // Allow plugins to register into all registries
+        {
+            let mut ctx = PluginContext {
+                filters: &mut filter_registry,
+                tools: &mut tool_registry,
+                providers: &mut providers,
+            };
+            plugin_manager.init_all(&mut ctx);
+        }
+
         Self {
             document: Some(Document::new("Untitled", 800, 600)),
             canvas: CanvasState::default(),
@@ -35,6 +64,9 @@ impl RasaApp {
             show_pixel_grid: false,
             show_rulers: true,
             status_message: "Ready".into(),
+            filter_registry,
+            tool_registry,
+            plugin_manager,
         }
     }
 
@@ -165,13 +197,20 @@ impl RasaApp {
             });
 
             ui.menu_button("Filter", |ui| {
-                for (label, filter_fn) in [
-                    ("Invert", filter_invert as fn(&mut Document)),
-                    ("Grayscale", filter_grayscale),
-                ] {
-                    if ui.button(label).clicked() {
-                        if let Some(doc) = &mut self.document {
-                            filter_fn(doc);
+                let names: Vec<String> = self
+                    .filter_registry
+                    .list_filters()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect();
+                for name in &names {
+                    if ui.button(name.as_str()).clicked() {
+                        if let Some(doc) = &mut self.document
+                            && let Some(id) = doc.active_layer
+                            && let Some(buf) = doc.get_pixels_mut(id)
+                            && let Some(filter) = self.filter_registry.filter_by_name(name)
+                        {
+                            filter.apply(buf);
                         }
                         ui.close_menu();
                     }
@@ -311,22 +350,6 @@ impl eframe::App for RasaApp {
 
 // ── Helpers ──
 
-fn filter_invert(doc: &mut Document) {
-    if let Some(id) = doc.active_layer
-        && let Some(buf) = doc.get_pixels_mut(id)
-    {
-        rasa_engine::filters::invert(buf);
-    }
-}
-
-fn filter_grayscale(doc: &mut Document) {
-    if let Some(id) = doc.active_layer
-        && let Some(buf) = doc.get_pixels_mut(id)
-    {
-        rasa_engine::filters::grayscale(buf);
-    }
-}
-
 /// Simple file open dialog (returns None if no GUI dialog available).
 fn rfd_open_file() -> Option<PathBuf> {
     // In headless/test environments, this returns None.
@@ -346,6 +369,11 @@ mod tests {
     #[test]
     fn app_default_state() {
         // Can't create full eframe context in tests, but verify state struct
+        let mut filter_registry = FilterRegistry::new();
+        rasa_engine::filter_builtins::register_builtins(&mut filter_registry);
+        let mut tool_registry = ToolRegistry::new();
+        crate::tool_builtins::register_builtins(&mut tool_registry);
+
         let app = RasaApp {
             document: Some(Document::new("Test", 100, 100)),
             canvas: CanvasState::default(),
@@ -357,22 +385,40 @@ mod tests {
             show_pixel_grid: false,
             show_rulers: true,
             status_message: "Ready".into(),
+            filter_registry,
+            tool_registry,
+            plugin_manager: PluginManager::new(),
         };
         assert!(app.document.is_some());
         assert_eq!(app.active_tool, ActiveTool::Brush);
         assert_eq!(app.brush_size, 10.0);
+        assert_eq!(app.filter_registry.len(), 4);
+        assert_eq!(app.tool_registry.len(), 10);
     }
 
     #[test]
-    fn filter_invert_runs() {
+    fn filter_registry_applies_to_doc() {
+        let mut reg = FilterRegistry::new();
+        rasa_engine::filter_builtins::register_builtins(&mut reg);
         let mut doc = Document::new("Test", 4, 4);
-        filter_invert(&mut doc);
-        // Should not panic, background layer gets inverted
+        if let Some(id) = doc.active_layer
+            && let Some(buf) = doc.get_pixels_mut(id)
+        {
+            let filter = reg.filter_by_name("Invert").unwrap();
+            filter.apply(buf);
+        }
     }
 
     #[test]
-    fn filter_grayscale_runs() {
+    fn filter_registry_grayscale_applies() {
+        let mut reg = FilterRegistry::new();
+        rasa_engine::filter_builtins::register_builtins(&mut reg);
         let mut doc = Document::new("Test", 4, 4);
-        filter_grayscale(&mut doc);
+        if let Some(id) = doc.active_layer
+            && let Some(buf) = doc.get_pixels_mut(id)
+        {
+            let filter = reg.filter_by_name("Grayscale").unwrap();
+            filter.apply(buf);
+        }
     }
 }

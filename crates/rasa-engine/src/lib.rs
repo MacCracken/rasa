@@ -1,5 +1,7 @@
 pub mod brush;
 pub mod compositor;
+pub mod filter;
+pub mod filter_builtins;
 pub mod filters;
 pub mod renderer;
 pub mod text;

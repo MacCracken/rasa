@@ -1,8 +1,8 @@
 # Roadmap
 
-> **Version**: 2026.3.16
+> **Version**: 2026.3.18
 > **Status**: MVP v1 complete — all 10 phases done, post-MVP in progress
-> **Tests**: 566 passing (89% coverage on testable crates)
+> **Tests**: 594 passing (89% coverage on testable crates)
 
 ---
 
@@ -23,11 +23,18 @@
 
 ---
 
-## Post-MVP Remaining
+## Post-MVP v1 (Complete)
 
 ### Platform
-- **Plugin system** — third-party filters, tools, AI models
+- **Plugin system** — `Filter`, `Tool`, `Plugin` traits + registries, `PluginManager`, provider-aware AI pipeline | Done
+
+---
+
+## Post-MVP v2 (Remaining)
+
+### Platform
 - **Tablet optimization** — touch UI mode, stylus gestures
+- **Dynamic plugin loading** — WASM or native dylib discovery at runtime
 
 ### Ecosystem Integration
 *(All items complete)*

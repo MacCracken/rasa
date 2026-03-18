@@ -21,3 +21,7 @@ model_cache = "~/.local/share/rasa/models"
 database = "~/.local/share/rasa/rasa.db"
 # Auto-save interval (seconds, 0 to disable)
 autosave_interval = 120
+
+[plugins]
+# Plugin crate names to load at startup
+# enabled = ["rasa-plugin-watercolor", "rasa-plugin-retro-filters"]
