@@ -2,6 +2,62 @@
 
 All notable changes to Rasa will be documented in this file.
 
+## [2026.3.18] — 2026-03-18
+
+### Added
+
+**Plugin System** (rasa-engine, rasa-ui, rasa-ai)
+- `Filter` trait + `FilterRegistry` — pluggable filter interface with runtime registration
+- 4 built-in filter wrappers: Invert, Grayscale, Gaussian Blur, Sharpen
+- `Tool` trait + `ToolRegistry` — pluggable tool interface with active tool tracking
+- 10 built-in tool impls matching existing `ActiveTool` enum
+- `Plugin` trait + `PluginContext` + `PluginManager` — third-party registration system
+- Provider-aware AI pipeline: `AiPipeline` now holds `ProviderRegistry`, routes `StyleTransfer`/`ColorGrade` through registered providers
+- `AiPipeline::with_registry()` constructor for custom provider sets
+- Dynamic Filter menu in UI — renders from `FilterRegistry` instead of hardcoded list
+- `PluginError` variant added to `RasaError`
+- `[plugins]` section in `rasa.example.toml`
+
+**Gradient Vector Fills** (rasa-core, rasa-engine)
+- `FillStyle::LinearGradient` — start/end points with start/end colors
+- `FillStyle::RadialGradient` — center/radius with center/edge colors
+- `sample_fill()` dispatcher for all three fill styles in vector renderer
+
+**Color Space Rendering** (rasa-engine)
+- Display P3: proper sRGB→P3 gamut matrix (Bradford-adapted) with sRGB transfer function
+- CMYK preview: naive CMYK roundtrip simulation for on-screen soft-proofing
+
+**File Dialogs** (rasa-ui)
+- `rfd::FileDialog` integration replacing stub functions
+- Open dialog: Images (9 formats), Rasa Project, All Files filters
+- Save dialog: PNG, JPEG, WebP, TIFF, BMP, Rasa Project filters
+
+**Text Rendering** (rasa-engine)
+- `render_text_layer()` now discovers and uses system fonts (Linux/macOS/Windows)
+- Falls back to transparent buffer only when no system font is found
+
+**Configuration** (rasa-ai, rasa-ui)
+- `RASA_SYNAPSE_URL` environment variable for AI server endpoint (default: `http://localhost:8090`)
+- `RASA_AI_TIMEOUT` environment variable for HTTP timeout in seconds (default: 300)
+
+**Build Infrastructure**
+- `bump-version.sh` updated to sync VERSION, Cargo.toml, Cargo.lock, .agnos-agent.json, and roadmap.md
+- Makefile `version-bump` target now delegates to the bump script
+- P0 roadmap section: code refactor, review/audit, security, performance sweep items
+
+### Improved
+
+- **Vector rendering performance**: fill and stroke now iterate only the path bounding box instead of the full canvas
+- **Selection::to_mask optimization**: Rect and Ellipse use direct bounding-box iteration instead of per-pixel `contains()` across entire image
+- **AI workflow memory**: `ai_select()` no longer clones the input buffer (borrows instead)
+- **Error handling**: replaced 6 `.unwrap()` calls on `.mime_str()` in AI client with `.expect()` including reason
+
+### Test Summary
+
+**600 tests passing** across 7 crates (up from 566). 89% coverage on testable crates.
+
+---
+
 ## [2026.3.16] — 2026-03-16
 
 ### Added

@@ -4,7 +4,7 @@ set -euo pipefail
 if [ $# -ne 1 ]; then
     echo "Usage: $0 <new_version>"
     echo "  Version format: YYYY.M.D or YYYY.M.D-N"
-    echo "  Example: $0 2026.3.15"
+    echo "  Example: $0 2026.3.18"
     exit 1
 fi
 
@@ -22,14 +22,30 @@ cd "$SCRIPT_DIR"
 OLD_VERSION=$(cat VERSION)
 echo "Bumping version: ${OLD_VERSION} -> ${NEW_VERSION}"
 
-# Update VERSION file
+# 1. VERSION file
 echo "$NEW_VERSION" > VERSION
+echo "  Updated VERSION"
 
-# Update Cargo.toml workspace version
+# 2. Cargo.toml workspace version
 sed -i "s/^version = \"${OLD_VERSION}\"/version = \"${NEW_VERSION}\"/" Cargo.toml
+echo "  Updated Cargo.toml"
 
-echo "Updated:"
-echo "  VERSION"
-echo "  Cargo.toml"
+# 3. Cargo.lock (regenerate from updated Cargo.toml)
+cargo generate-lockfile --quiet 2>/dev/null || true
+echo "  Updated Cargo.lock"
+
+# 4. .agnos-agent.json
+if [ -f .agnos-agent.json ]; then
+    sed -i "s/\"version\": \"[0-9]\{4\}\.[0-9]*\.[0-9]*\"/\"version\": \"${NEW_VERSION}\"/" .agnos-agent.json
+    echo "  Updated .agnos-agent.json"
+fi
+
+# 5. docs/development/roadmap.md
+if [ -f docs/development/roadmap.md ]; then
+    sed -i "s/> \*\*Version\*\*: [0-9]\{4\}\.[0-9]*\.[0-9]*/> **Version**: ${NEW_VERSION}/" docs/development/roadmap.md
+    echo "  Updated docs/development/roadmap.md"
+fi
+
 echo ""
-echo "Done. Run 'cargo check' to verify."
+echo "Done. Version is now ${NEW_VERSION}."
+echo "Run 'cargo check' to verify."

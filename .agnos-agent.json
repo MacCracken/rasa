@@ -1,6 +1,6 @@
 {
   "name": "rasa",
-  "version": "2026.3.13",
+  "version": "2026.3.18",
   "description": "AI-powered image editor with voice control via AGNOS",
   "intents": [
     {

@@ -30,7 +30,38 @@
 
 ---
 
-## Post-MVP v2 (Remaining)
+## P0 — Code Health (Next)
+
+### Code Refactor
+- **Dead code cleanup** — remove `#[allow(dead_code)]` items (PSD export stubs), unused imports
+- **Consistent error handling** — audit remaining `.expect()`/`.unwrap()` in non-test code, convert to `?` or proper errors
+- **Module structure** — evaluate whether `ActiveTool` enum can be retired in favor of `ToolRegistry`-only
+- **API surface audit** — review pub visibility, seal internal types, reduce leaky abstractions
+
+### Review & Audit
+- **Dependency audit** — `cargo audit`, check for unused deps, pin versions
+- **Unsafe audit** — verify zero `unsafe` blocks, audit FFI boundaries (lcms2, wgpu, ash)
+- **License compliance** — verify all transitive deps are AGPL-3.0 compatible
+- **Test coverage gaps** — roundtrip tests for `.rasa` format, GPU device fallback, canvas interactions, multi-provider AI routing
+
+### Security
+- **Input validation** — fuzz/harden image format parsers (PNG, PSD, RAW), reject malformed `.rasa` files
+- **Path traversal** — sanitize file paths in import/export, MCP tool inputs, plugin loading
+- **AI API surface** — validate/sanitize prompts before sending to Synapse, rate-limit inference requests
+- **Secret handling** — ensure no API keys/tokens logged or serialized to `.rasa` files
+- **MAX_HEADER_SIZE** — review all size limits in project.rs, catalog.rs for DoS resilience
+
+### Performance
+- **GPU compositing path** — move layer compositing to wgpu compute shaders
+- **Parallel vector rasterization** — rayon per-row for `render_filled`/`render_stroked`
+- **Lazy font loading** — cache system font discovery result, avoid re-scanning per text layer render
+- **Tile-based incremental render** — wire `RenderCache` into the UI paint loop
+- **Memory profiling** — audit large-buffer allocations in AI pipeline, compositor, export path
+- **Benchmark suite** — criterion benchmarks for compositor, filters, vector render, AI pre/post-processing
+
+---
+
+## Post-MVP v2
 
 ### Platform
 - **Tablet optimization** — touch UI mode, stylus gestures

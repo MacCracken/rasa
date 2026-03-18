@@ -86,10 +86,6 @@ docker-dev: ## Build dev container
 version-sync: ## Display current version
 	@echo "Rasa v$(VERSION)"
 
-version-bump: ## Bump version (usage: make version-bump V=2026.3.15 or V=2026.3.15-1)
-	@test -n "$(V)" || (echo "Usage: make version-bump V=2026.3.15 or V=2026.3.15-1" && exit 1)
-	@echo "$(V)" | grep -qE '^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}(-[0-9]+)?$$' || \
-		(echo "Error: version must match YYYY.M.DD or YYYY.M.DD-N" && exit 1)
-	@echo "$(V)" > VERSION
-	@sed -i 's/^version = ".*"/version = "$(V)"/' Cargo.toml
-	@echo "Version bumped to $(V)"
+version-bump: ## Bump version (usage: make version-bump V=2026.3.18)
+	@test -n "$(V)" || (echo "Usage: make version-bump V=2026.3.18" && exit 1)
+	@./bump-version.sh "$(V)"
