@@ -127,13 +127,12 @@ pub async fn ai_select(
 ) -> Result<Selection, RasaError> {
     let input = doc
         .get_pixels(layer_id)
-        .ok_or(RasaError::LayerNotFound(layer_id))?
-        .clone();
+        .ok_or(RasaError::LayerNotFound(layer_id))?;
 
     let model = model.unwrap_or_else(crate::models::presets::sam_vit_h);
     let request = AiRequest::Segment { model };
 
-    let result = pipeline.run(&request, &input, on_progress).await?;
+    let result = pipeline.run(&request, input, on_progress).await?;
     apply::mask_to_selection(&result)
 }
 

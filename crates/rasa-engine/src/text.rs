@@ -11,14 +11,15 @@ use rasa_core::pixel::PixelBuffer;
 
 /// Render a [`TextLayer`] into a [`PixelBuffer`] of the given dimensions.
 ///
-/// Currently returns a transparent buffer because no font is bundled with the
-/// engine. Use [`render_text_layer_with_font`] to supply font data explicitly.
+/// Attempts to locate a system font automatically. If no font is found,
+/// returns a transparent buffer. Use [`render_text_layer_with_font`] to
+/// supply font data explicitly.
 pub fn render_text_layer(text: &TextLayer, width: u32, height: u32) -> PixelBuffer {
-    // No built-in font embedded yet — return transparent placeholder.
-    // When a default font is added to rasa-engine/src/fonts/, this will
-    // delegate to render_text_layer_with_font with the embedded bytes.
-    let _ = text;
-    PixelBuffer::new(width, height)
+    if let Some(font_data) = find_system_font() {
+        render_text_layer_with_font(text, width, height, &font_data)
+    } else {
+        PixelBuffer::new(width, height)
+    }
 }
 
 /// Render a [`TextLayer`] into a [`PixelBuffer`] using the supplied TrueType/OpenType font bytes.
@@ -115,6 +116,37 @@ fn compute_line_width<F: Font, SF: ScaleFont<F>>(scaled_font: &SF, line: &str) -
     width
 }
 
+/// Attempt to load a TrueType font from common system paths.
+/// Returns `None` if no suitable font is found.
+fn find_system_font() -> Option<Vec<u8>> {
+    let candidates = [
+        // Linux
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/google-noto/NotoSans-Regular.ttf",
+        // macOS
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/SFNSText.ttf",
+        "/Library/Fonts/Arial.ttf",
+        // Windows
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+    ];
+    for path in &candidates {
+        if let Ok(data) = std::fs::read(path) {
+            return Some(data);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,30 +160,6 @@ mod tests {
             alignment: TextAlign::Left,
             line_height: 1.2,
         }
-    }
-
-    /// Try to load a TrueType font from common system paths.
-    /// Returns `None` if no font is found (tests that need a font will be skipped).
-    fn find_system_font() -> Option<Vec<u8>> {
-        let candidates = [
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
-            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf",
-            "/usr/share/fonts/noto/NotoSans-Regular.ttf",
-            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-            "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "C:\\Windows\\Fonts\\arial.ttf",
-        ];
-        for path in &candidates {
-            if let Ok(data) = std::fs::read(path) {
-                return Some(data);
-            }
-        }
-        None
     }
 
     #[test]
@@ -174,7 +182,7 @@ mod tests {
 
     #[test]
     fn render_text_has_pixels() {
-        let Some(font_data) = find_system_font() else {
+        let Some(font_data) = super::find_system_font() else {
             eprintln!("skipping render_text_has_pixels: no system font found");
             return;
         };
@@ -201,7 +209,7 @@ mod tests {
 
     #[test]
     fn render_text_multiline() {
-        let Some(font_data) = find_system_font() else {
+        let Some(font_data) = super::find_system_font() else {
             eprintln!("skipping render_text_multiline: no system font found");
             return;
         };
@@ -220,7 +228,7 @@ mod tests {
 
     #[test]
     fn render_text_center_alignment() {
-        let Some(font_data) = find_system_font() else {
+        let Some(font_data) = super::find_system_font() else {
             eprintln!("skipping render_text_center_alignment: no system font found");
             return;
         };
@@ -239,7 +247,7 @@ mod tests {
 
     #[test]
     fn render_empty_content_with_font() {
-        let Some(font_data) = find_system_font() else {
+        let Some(font_data) = super::find_system_font() else {
             eprintln!("skipping render_empty_content_with_font: no system font found");
             return;
         };

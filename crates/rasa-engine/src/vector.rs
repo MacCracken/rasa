@@ -54,16 +54,71 @@ fn to_bez_path(path: &VectorPath) -> BezPath {
 
 /// Fill the interior of `bez` using `kurbo::Shape::contains`.
 fn render_filled(buf: &mut PixelBuffer, bez: &BezPath, fill: &FillStyle, w: u32, h: u32) {
-    let FillStyle::Solid(color) = fill;
+    // Limit iteration to the path's bounding box
+    let bbox = bez.bounding_box();
+    let x0 = (bbox.x0.floor() as u32).min(w);
+    let y0 = (bbox.y0.floor() as u32).min(h);
+    let x1 = (bbox.x1.ceil() as u32).min(w);
+    let y1 = (bbox.y1.ceil() as u32).min(h);
 
-    for y in 0..h {
-        for x in 0..w {
+    for y in y0..y1 {
+        for x in x0..x1 {
             let pt = kurbo::Point::new(x as f64 + 0.5, y as f64 + 0.5);
             if bez.contains(pt) {
-                blend_pixel(buf, x, y, *color);
+                let color = sample_fill(fill, pt);
+                blend_pixel(buf, x, y, color);
             }
         }
     }
+}
+
+fn sample_fill(fill: &FillStyle, pt: kurbo::Point) -> Color {
+    match fill {
+        FillStyle::Solid(color) => *color,
+        FillStyle::LinearGradient {
+            start,
+            end,
+            color_start,
+            color_end,
+        } => {
+            let dx = end.x - start.x;
+            let dy = end.y - start.y;
+            let len_sq = dx * dx + dy * dy;
+            let t = if len_sq < 1e-6 {
+                0.0
+            } else {
+                ((pt.x - start.x) * dx + (pt.y - start.y) * dy) / len_sq
+            };
+            let t = t.clamp(0.0, 1.0) as f32;
+            lerp_color(color_start, color_end, t)
+        }
+        FillStyle::RadialGradient {
+            center,
+            radius,
+            color_center,
+            color_edge,
+        } => {
+            let dx = pt.x - center.x;
+            let dy = pt.y - center.y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            let t = if *radius < 1e-6 {
+                1.0
+            } else {
+                (dist / radius).min(1.0)
+            };
+            let t = t as f32;
+            lerp_color(color_center, color_edge, t)
+        }
+    }
+}
+
+fn lerp_color(a: &Color, b: &Color, t: f32) -> Color {
+    Color::new(
+        a.r + (b.r - a.r) * t,
+        a.g + (b.g - a.g) * t,
+        a.b + (b.b - a.b) * t,
+        a.a + (b.a - a.a) * t,
+    )
 }
 
 /// Stroke the path using a distance-based approach.
@@ -74,8 +129,15 @@ fn render_stroked(buf: &mut PixelBuffer, bez: &BezPath, style: &StrokeStyle, w: 
     let half_width = style.width / 2.0;
     let segments: Vec<PathSeg> = bez.segments().collect();
 
-    for y in 0..h {
-        for x in 0..w {
+    // Limit iteration to the path's bounding box + stroke width
+    let bbox = bez.bounding_box();
+    let x0 = ((bbox.x0 - half_width).floor().max(0.0) as u32).min(w);
+    let y0 = ((bbox.y0 - half_width).floor().max(0.0) as u32).min(h);
+    let x1 = ((bbox.x1 + half_width).ceil() as u32).min(w);
+    let y1 = ((bbox.y1 + half_width).ceil() as u32).min(h);
+
+    for y in y0..y1 {
+        for x in x0..x1 {
             let pt = kurbo::Point::new(x as f64 + 0.5, y as f64 + 0.5);
             let mut min_dist_sq = f64::MAX;
             for seg in &segments {
@@ -173,6 +235,52 @@ mod tests {
         // A pixel far from the line should be transparent.
         let off_line = buf.get(10, 0).unwrap();
         assert_eq!(off_line.a, 0.0, "pixel far from line should be transparent");
+    }
+
+    #[test]
+    fn render_linear_gradient_fill() {
+        let mut data = VectorData::new();
+        data.add_path(VectorPath::rect(
+            0.0,
+            0.0,
+            10.0,
+            10.0,
+            Some(FillStyle::LinearGradient {
+                start: rasa_core::geometry::Point { x: 0.0, y: 0.0 },
+                end: rasa_core::geometry::Point { x: 10.0, y: 0.0 },
+                color_start: Color::BLACK,
+                color_end: Color::WHITE,
+            }),
+            None,
+        ));
+        let buf = render_vector_layer(&data, 10, 10);
+        let left = buf.get(1, 5).unwrap();
+        let right = buf.get(8, 5).unwrap();
+        // Right should be brighter than left
+        assert!(right.r > left.r);
+    }
+
+    #[test]
+    fn render_radial_gradient_fill() {
+        let mut data = VectorData::new();
+        data.add_path(VectorPath::rect(
+            0.0,
+            0.0,
+            10.0,
+            10.0,
+            Some(FillStyle::RadialGradient {
+                center: rasa_core::geometry::Point { x: 5.0, y: 5.0 },
+                radius: 5.0,
+                color_center: Color::WHITE,
+                color_edge: Color::BLACK,
+            }),
+            None,
+        ));
+        let buf = render_vector_layer(&data, 10, 10);
+        let center = buf.get(5, 5).unwrap();
+        let edge = buf.get(0, 5).unwrap();
+        // Center should be brighter than edge
+        assert!(center.r > edge.r);
     }
 
     #[test]

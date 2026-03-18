@@ -61,6 +61,7 @@ ash = "0.38"
 # GUI
 eframe = "0.31"
 egui = "0.31"
+rfd = "0.15"
 
 # 2D geometry / bezier curves
 kurbo = "0.13"

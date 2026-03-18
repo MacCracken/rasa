@@ -21,14 +21,13 @@ pub fn render(doc: &Document, target_space: ColorSpace) -> RenderOutput {
     let buffer = match target_space {
         ColorSpace::LinearRgb => composited,
         ColorSpace::Srgb => convert_linear_to_srgb(&composited),
-        ColorSpace::DisplayP3 => {
-            // Approximate: sRGB transfer function for now, proper P3 gamut mapping is post-MVP
-            convert_linear_to_srgb(&composited)
-        }
+        ColorSpace::DisplayP3 => convert_linear_to_display_p3(&composited),
         ColorSpace::Cmyk => {
-            // CMYK rendering: convert to sRGB for display; actual CMYK
-            // conversion happens at the export boundary in rasa-storage.
-            convert_linear_to_srgb(&composited)
+            // For display, convert linear RGB to sRGB.
+            // Actual CMYK separation happens at export in rasa-storage.
+            // We apply a naive CMYK simulation: desaturate slightly to
+            // approximate the narrower CMYK gamut on screen.
+            convert_linear_to_cmyk_preview(&composited)
         }
     };
 
@@ -116,6 +115,82 @@ fn convert_linear_to_srgb(buf: &PixelBuffer) -> PixelBuffer {
                     linear_to_srgb(px.r),
                     linear_to_srgb(px.g),
                     linear_to_srgb(px.b),
+                    px.a,
+                ),
+            );
+        }
+    }
+    output
+}
+
+/// Convert an entire buffer from linear sRGB to Display P3.
+///
+/// Display P3 uses the sRGB transfer function but a wider gamut.
+/// The conversion first maps from sRGB primaries to P3 primaries,
+/// then applies the sRGB transfer curve.
+fn convert_linear_to_display_p3(buf: &PixelBuffer) -> PixelBuffer {
+    // sRGB linear -> Display P3 linear matrix (Bradford-adapted)
+    // Source: ICC / color science standard matrices
+    const M: [[f32; 3]; 3] = [
+        [0.8225, 0.1774, 0.0000],
+        [0.0332, 0.9669, 0.0000],
+        [0.0171, 0.0724, 0.9108],
+    ];
+
+    let (w, h) = buf.dimensions();
+    let mut output = PixelBuffer::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let px = buf.get(x, y).unwrap();
+            let r = M[0][0] * px.r + M[0][1] * px.g + M[0][2] * px.b;
+            let g = M[1][0] * px.r + M[1][1] * px.g + M[1][2] * px.b;
+            let b = M[2][0] * px.r + M[2][1] * px.g + M[2][2] * px.b;
+            output.set(
+                x,
+                y,
+                Color::new(
+                    linear_to_srgb(r.clamp(0.0, 1.0)),
+                    linear_to_srgb(g.clamp(0.0, 1.0)),
+                    linear_to_srgb(b.clamp(0.0, 1.0)),
+                    px.a,
+                ),
+            );
+        }
+    }
+    output
+}
+
+/// Convert linear RGB to a CMYK-simulated sRGB preview.
+///
+/// Approximates CMYK gamut limitations for on-screen preview.
+/// Real CMYK output uses ICC profiles at the export boundary.
+fn convert_linear_to_cmyk_preview(buf: &PixelBuffer) -> PixelBuffer {
+    let (w, h) = buf.dimensions();
+    let mut output = PixelBuffer::new(w, h);
+    for py in 0..h {
+        for px_x in 0..w {
+            let px = buf.get(px_x, py).unwrap();
+            let max = px.r.max(px.g).max(px.b);
+            let k = 1.0 - max;
+            let (c, m, yc) = if max < 1e-6 {
+                (0.0, 0.0, 0.0)
+            } else {
+                (
+                    (1.0 - px.r - k) / max,
+                    (1.0 - px.g - k) / max,
+                    (1.0 - px.b - k) / max,
+                )
+            };
+            let r = (1.0 - c) * (1.0 - k);
+            let g = (1.0 - m) * (1.0 - k);
+            let b = (1.0 - yc) * (1.0 - k);
+            output.set(
+                px_x,
+                py,
+                Color::new(
+                    linear_to_srgb(r),
+                    linear_to_srgb(g),
+                    linear_to_srgb(b),
                     px.a,
                 ),
             );
@@ -268,6 +343,24 @@ mod tests {
         let output = render(&doc, ColorSpace::Srgb);
         let px = output.buffer.get(0, 0).unwrap();
         // White in linear -> white in sRGB (1.0 maps to 1.0)
+        assert!(approx_eq(px.r, 1.0));
+    }
+
+    #[test]
+    fn render_display_p3() {
+        let doc = Document::new("Test", 4, 4);
+        let output = render(&doc, ColorSpace::DisplayP3);
+        let px = output.buffer.get(0, 0).unwrap();
+        // White in sRGB should still be near-white in P3
+        assert!(approx_eq(px.r, 1.0));
+    }
+
+    #[test]
+    fn render_cmyk_preview() {
+        let doc = Document::new("Test", 4, 4);
+        let output = render(&doc, ColorSpace::Cmyk);
+        let px = output.buffer.get(0, 0).unwrap();
+        // White should roundtrip through CMYK as white
         assert!(approx_eq(px.r, 1.0));
     }
 

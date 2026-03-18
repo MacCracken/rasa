@@ -2,7 +2,7 @@
 
 > **Version**: 2026.3.18
 > **Status**: MVP v1 complete — all 10 phases done, post-MVP in progress
-> **Tests**: 594 passing (89% coverage on testable crates)
+> **Tests**: 600 passing (89% coverage on testable crates)
 
 ---
 

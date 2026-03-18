@@ -200,6 +200,51 @@ impl Selection {
                 data: vec![1.0; (width as usize) * (height as usize)],
             },
             Self::Mask { .. } => self.clone(),
+            Self::Rect(r) => {
+                let mut data = vec![0.0_f32; (width as usize) * (height as usize)];
+                let x0 = (r.x.max(0.0) as u32).min(width);
+                let y0 = (r.y.max(0.0) as u32).min(height);
+                let x1 = ((r.x + r.width).ceil() as u32).min(width);
+                let y1 = ((r.y + r.height).ceil() as u32).min(height);
+                for y in y0..y1 {
+                    for x in x0..x1 {
+                        data[(y as usize) * (width as usize) + (x as usize)] = 1.0;
+                    }
+                }
+                Self::Mask {
+                    width,
+                    height,
+                    data,
+                }
+            }
+            Self::Ellipse(r) => {
+                let mut data = vec![0.0_f32; (width as usize) * (height as usize)];
+                let cx = r.x + r.width / 2.0;
+                let cy = r.y + r.height / 2.0;
+                let rx = r.width / 2.0;
+                let ry = r.height / 2.0;
+                if rx > 0.0 && ry > 0.0 {
+                    // Only iterate over the bounding box
+                    let x0 = (r.x.max(0.0) as u32).min(width);
+                    let y0 = (r.y.max(0.0) as u32).min(height);
+                    let x1 = ((r.x + r.width).ceil() as u32).min(width);
+                    let y1 = ((r.y + r.height).ceil() as u32).min(height);
+                    for y in y0..y1 {
+                        for x in x0..x1 {
+                            let dx = (x as f64 + 0.5 - cx) / rx;
+                            let dy = (y as f64 + 0.5 - cy) / ry;
+                            if dx * dx + dy * dy <= 1.0 {
+                                data[(y as usize) * (width as usize) + (x as usize)] = 1.0;
+                            }
+                        }
+                    }
+                }
+                Self::Mask {
+                    width,
+                    height,
+                    data,
+                }
+            }
             _ => {
                 let mut data = vec![0.0_f32; (width as usize) * (height as usize)];
                 for y in 0..height {

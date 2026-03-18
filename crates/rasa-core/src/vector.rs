@@ -32,6 +32,18 @@ pub enum PathSegment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FillStyle {
     Solid(Color),
+    LinearGradient {
+        start: Point,
+        end: Point,
+        color_start: Color,
+        color_end: Color,
+    },
+    RadialGradient {
+        center: Point,
+        radius: f64,
+        color_center: Color,
+        color_edge: Color,
+    },
 }
 
 /// Stroke style for a path outline.
@@ -267,9 +279,33 @@ mod tests {
     #[test]
     fn fill_style_solid() {
         let fill = FillStyle::Solid(Color::WHITE);
-        match fill {
-            FillStyle::Solid(c) => assert_eq!(c, Color::WHITE),
+        if let FillStyle::Solid(c) = fill {
+            assert_eq!(c, Color::WHITE);
+        } else {
+            panic!("expected Solid");
         }
+    }
+
+    #[test]
+    fn fill_style_linear_gradient() {
+        let fill = FillStyle::LinearGradient {
+            start: Point { x: 0.0, y: 0.0 },
+            end: Point { x: 10.0, y: 0.0 },
+            color_start: Color::BLACK,
+            color_end: Color::WHITE,
+        };
+        assert!(matches!(fill, FillStyle::LinearGradient { .. }));
+    }
+
+    #[test]
+    fn fill_style_radial_gradient() {
+        let fill = FillStyle::RadialGradient {
+            center: Point { x: 5.0, y: 5.0 },
+            radius: 10.0,
+            color_center: Color::WHITE,
+            color_edge: Color::BLACK,
+        };
+        assert!(matches!(fill, FillStyle::RadialGradient { .. }));
     }
 
     #[test]

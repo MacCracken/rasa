@@ -38,8 +38,10 @@ impl RasaApp {
         crate::tool_builtins::register_builtins(&mut tool_registry);
 
         let mut providers = rasa_ai::registry::ProviderRegistry::new();
+        let synapse_url = std::env::var("RASA_SYNAPSE_URL")
+            .unwrap_or_else(|_| "http://localhost:8090".to_string());
         providers.register(Box::new(rasa_ai::provider_synapse::SynapseProvider::new(
-            "http://localhost:8090",
+            &synapse_url,
         )));
 
         let plugin_manager = PluginManager::new();
@@ -352,14 +354,28 @@ impl eframe::App for RasaApp {
 
 /// Simple file open dialog (returns None if no GUI dialog available).
 fn rfd_open_file() -> Option<PathBuf> {
-    // In headless/test environments, this returns None.
-    // In a full desktop build, you'd use rfd::FileDialog here.
-    None
+    rfd::FileDialog::new()
+        .add_filter(
+            "Images",
+            &[
+                "png", "jpg", "jpeg", "webp", "tiff", "tif", "bmp", "gif", "psd",
+            ],
+        )
+        .add_filter("Rasa Project", &["rasa"])
+        .add_filter("All Files", &["*"])
+        .pick_file()
 }
 
 /// Simple file save dialog.
 fn rfd_save_file() -> Option<PathBuf> {
-    None
+    rfd::FileDialog::new()
+        .add_filter("PNG", &["png"])
+        .add_filter("JPEG", &["jpg", "jpeg"])
+        .add_filter("WebP", &["webp"])
+        .add_filter("TIFF", &["tiff", "tif"])
+        .add_filter("BMP", &["bmp"])
+        .add_filter("Rasa Project", &["rasa"])
+        .save_file()
 }
 
 #[cfg(test)]

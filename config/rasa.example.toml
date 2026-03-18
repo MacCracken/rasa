@@ -12,6 +12,7 @@ force_cpu = false
 
 [ai]
 # hoosh/Synapse endpoint for Stable Diffusion
+# Override via RASA_SYNAPSE_URL environment variable
 synapse_url = "http://localhost:8090"
 # ONNX model cache directory
 model_cache = "~/.local/share/rasa/models"

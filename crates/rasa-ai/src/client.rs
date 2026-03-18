@@ -28,10 +28,14 @@ struct ModelsResponse {
 
 impl SynapseClient {
     pub fn new(base_url: &str) -> Self {
+        let timeout_secs: u64 = std::env::var("RASA_AI_TIMEOUT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(300);
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             http: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(300))
+                .timeout(std::time::Duration::from_secs(timeout_secs))
                 .build()
                 .expect("failed to create HTTP client"),
         }
@@ -89,7 +93,7 @@ impl SynapseClient {
                 reqwest::multipart::Part::bytes(image_png.to_vec())
                     .file_name("input.png")
                     .mime_str("image/png")
-                    .unwrap(),
+                    .expect("image/png is a valid MIME type"),
             );
         if let Some(p) = prompt {
             form = form.text("prompt", p.to_string());
@@ -113,7 +117,7 @@ impl SynapseClient {
                 reqwest::multipart::Part::bytes(image_png.to_vec())
                     .file_name("input.png")
                     .mime_str("image/png")
-                    .unwrap(),
+                    .expect("image/png is a valid MIME type"),
             );
         self.post_multipart_image(&url, form).await
     }
@@ -128,7 +132,7 @@ impl SynapseClient {
                 reqwest::multipart::Part::bytes(image_png.to_vec())
                     .file_name("input.png")
                     .mime_str("image/png")
-                    .unwrap(),
+                    .expect("image/png is a valid MIME type"),
             );
         self.post_multipart_image(&url, form).await
     }
@@ -210,7 +214,7 @@ impl SynapseClient {
                 reqwest::multipart::Part::bytes(image_png.to_vec())
                     .file_name("input.png")
                     .mime_str("image/png")
-                    .unwrap(),
+                    .expect("image/png is a valid MIME type"),
             );
         self.post_multipart_image(&url, form).await
     }
@@ -231,7 +235,7 @@ impl SynapseClient {
                 reqwest::multipart::Part::bytes(image_png.to_vec())
                     .file_name("input.png")
                     .mime_str("image/png")
-                    .unwrap(),
+                    .expect("image/png is a valid MIME type"),
             );
         self.post_multipart_image(&url, form).await
     }
@@ -250,7 +254,7 @@ impl SynapseClient {
                 reqwest::multipart::Part::bytes(image_png.to_vec())
                     .file_name("input.png")
                     .mime_str("image/png")
-                    .unwrap(),
+                    .expect("image/png is a valid MIME type"),
             );
         self.post_multipart_image(&url, form).await
     }
