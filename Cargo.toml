@@ -69,6 +69,9 @@ kurbo = "0.13"
 # Parallelism
 rayon = "1"
 
+# Image processing (shared with tazama, aethersafta)
+ranga = { version = "0.20.5", default-features = false }
+
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }

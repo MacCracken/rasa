@@ -34,6 +34,26 @@ impl Color {
         Self { r, g, b, a }
     }
 
+    /// Convert to ranga's linear RGBA type (zero-cost, same layout).
+    pub fn to_lin_rgba(self) -> ranga::color::LinRgba {
+        ranga::color::LinRgba {
+            r: self.r,
+            g: self.g,
+            b: self.b,
+            a: self.a,
+        }
+    }
+
+    /// Convert from ranga's linear RGBA type.
+    pub fn from_lin_rgba(c: ranga::color::LinRgba) -> Self {
+        Self {
+            r: c.r,
+            g: c.g,
+            b: c.b,
+            a: c.a,
+        }
+    }
+
     pub fn from_srgb_u8(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self {
             r: srgb_to_linear(r as f32 / 255.0),
@@ -125,6 +145,9 @@ fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
     }
 }
 
+/// Convert sRGB component (0.0–1.0) to linear.
+///
+/// Uses the same IEC 61966-2-1 transfer function as ranga.
 pub fn srgb_to_linear(s: f32) -> f32 {
     if s <= 0.04045 {
         s / 12.92
@@ -133,12 +156,45 @@ pub fn srgb_to_linear(s: f32) -> f32 {
     }
 }
 
+/// Convert linear component (0.0–1.0) to sRGB.
 pub fn linear_to_srgb(l: f32) -> f32 {
     let l = l.clamp(0.0, 1.0);
     if l <= 0.0031308 {
         l * 12.92
     } else {
         1.055 * l.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// Convert an sRGB u8 value to linear f32 via ranga.
+pub fn srgb_u8_to_linear(c: u8) -> f32 {
+    ranga::color::srgb_to_linear(c)
+}
+
+/// Convert a linear f32 value to sRGB u8 via ranga.
+pub fn linear_to_srgb_u8(c: f32) -> u8 {
+    ranga::color::linear_to_srgb(c)
+}
+
+impl From<Color> for ranga::color::LinRgba {
+    fn from(c: Color) -> Self {
+        Self {
+            r: c.r,
+            g: c.g,
+            b: c.b,
+            a: c.a,
+        }
+    }
+}
+
+impl From<ranga::color::LinRgba> for Color {
+    fn from(c: ranga::color::LinRgba) -> Self {
+        Self {
+            r: c.r,
+            g: c.g,
+            b: c.b,
+            a: c.a,
+        }
     }
 }
 
@@ -304,6 +360,26 @@ pub enum BlendMode {
     HardLight,
     Difference,
     Exclusion,
+}
+
+impl BlendMode {
+    /// Convert to ranga's blend mode enum.
+    pub fn to_ranga(self) -> ranga::blend::BlendMode {
+        match self {
+            Self::Normal => ranga::blend::BlendMode::Normal,
+            Self::Multiply => ranga::blend::BlendMode::Multiply,
+            Self::Screen => ranga::blend::BlendMode::Screen,
+            Self::Overlay => ranga::blend::BlendMode::Overlay,
+            Self::Darken => ranga::blend::BlendMode::Darken,
+            Self::Lighten => ranga::blend::BlendMode::Lighten,
+            Self::ColorDodge => ranga::blend::BlendMode::ColorDodge,
+            Self::ColorBurn => ranga::blend::BlendMode::ColorBurn,
+            Self::SoftLight => ranga::blend::BlendMode::SoftLight,
+            Self::HardLight => ranga::blend::BlendMode::HardLight,
+            Self::Difference => ranga::blend::BlendMode::Difference,
+            Self::Exclusion => ranga::blend::BlendMode::Exclusion,
+        }
+    }
 }
 
 #[cfg(test)]

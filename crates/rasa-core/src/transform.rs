@@ -4,6 +4,8 @@ use crate::geometry::Point;
 
 /// 2D affine transform matrix (3x2).
 ///
+/// Delegates to [`ranga::transform::Affine`] for the underlying math.
+///
 /// ```text
 /// | a  c  tx |
 /// | b  d  ty |
@@ -11,103 +13,72 @@ use crate::geometry::Point;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Transform {
-    pub a: f64,
-    pub b: f64,
-    pub c: f64,
-    pub d: f64,
-    pub tx: f64,
-    pub ty: f64,
+    inner: ranga::transform::Affine,
 }
 
 impl Transform {
     pub const IDENTITY: Self = Self {
-        a: 1.0,
-        b: 0.0,
-        c: 0.0,
-        d: 1.0,
-        tx: 0.0,
-        ty: 0.0,
+        inner: ranga::transform::Affine::IDENTITY,
     };
 
     pub fn translate(tx: f64, ty: f64) -> Self {
         Self {
-            a: 1.0,
-            b: 0.0,
-            c: 0.0,
-            d: 1.0,
-            tx,
-            ty,
+            inner: ranga::transform::Affine::translate(tx, ty),
         }
     }
 
     pub fn scale(sx: f64, sy: f64) -> Self {
         Self {
-            a: sx,
-            b: 0.0,
-            c: 0.0,
-            d: sy,
-            tx: 0.0,
-            ty: 0.0,
+            inner: ranga::transform::Affine::scale(sx, sy),
         }
     }
 
     pub fn rotate(angle_rad: f64) -> Self {
-        let cos = angle_rad.cos();
-        let sin = angle_rad.sin();
         Self {
-            a: cos,
-            b: sin,
-            c: -sin,
-            d: cos,
-            tx: 0.0,
-            ty: 0.0,
+            inner: ranga::transform::Affine::rotate(angle_rad),
         }
     }
 
     /// Multiply two transforms: self * other (apply other first, then self).
     pub fn then(&self, other: &Transform) -> Self {
         Self {
-            a: self.a * other.a + self.c * other.b,
-            b: self.b * other.a + self.d * other.b,
-            c: self.a * other.c + self.c * other.d,
-            d: self.b * other.c + self.d * other.d,
-            tx: self.a * other.tx + self.c * other.ty + self.tx,
-            ty: self.b * other.tx + self.d * other.ty + self.ty,
+            inner: self.inner.then(&other.inner),
         }
     }
 
     /// Apply this transform to a point.
     pub fn apply(&self, p: Point) -> Point {
-        Point {
-            x: self.a * p.x + self.c * p.y + self.tx,
-            y: self.b * p.x + self.d * p.y + self.ty,
-        }
+        let (x, y) = self.inner.apply(p.x, p.y);
+        Point { x, y }
     }
 
     /// Compute the inverse transform, if it exists.
     pub fn inverse(&self) -> Option<Self> {
-        let det = self.a * self.d - self.b * self.c;
-        if det.abs() < 1e-12 {
-            return None;
-        }
-        let inv_det = 1.0 / det;
-        Some(Self {
-            a: self.d * inv_det,
-            b: -self.b * inv_det,
-            c: -self.c * inv_det,
-            d: self.a * inv_det,
-            tx: (self.c * self.ty - self.d * self.tx) * inv_det,
-            ty: (self.b * self.tx - self.a * self.ty) * inv_det,
-        })
+        self.inner.inverse().map(|inv| Self { inner: inv })
     }
 
     pub fn is_identity(&self) -> bool {
-        (self.a - 1.0).abs() < 1e-9
-            && self.b.abs() < 1e-9
-            && self.c.abs() < 1e-9
-            && (self.d - 1.0).abs() < 1e-9
-            && self.tx.abs() < 1e-9
-            && self.ty.abs() < 1e-9
+        self.inner.is_identity()
+    }
+
+    // Field accessors for serialization compatibility
+    pub fn a(&self) -> f64 {
+        self.inner.a
+    }
+    pub fn b(&self) -> f64 {
+        self.inner.b
+    }
+    pub fn c(&self) -> f64 {
+        self.inner.c
+    }
+    pub fn d(&self) -> f64 {
+        self.inner.d
+    }
+    pub fn tx(&self) -> f64 {
+        self.inner.tx
+    }
+    pub fn ty(&self) -> f64 {
+        self.inner.ty
     }
 }
 
@@ -162,7 +133,6 @@ mod tests {
     fn then_composes() {
         let s = Transform::scale(2.0, 2.0);
         let t = Transform::translate(10.0, 10.0);
-        // Scale then translate: point (5,5) -> (10,10) -> (20,20)
         let combined = t.then(&s);
         let result = combined.apply(Point { x: 5.0, y: 5.0 });
         assert!(approx_eq(result.x, 20.0));

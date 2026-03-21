@@ -11,6 +11,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
+ranga = { workspace = true }
 
 kurbo = { workspace = true }
 
