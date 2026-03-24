@@ -2,7 +2,8 @@ use egui;
 use muharrir::inspector::{Property, PropertySheet};
 use rasa_core::Document;
 use rasa_core::color::BlendMode;
-use rasa_core::layer::Layer;
+use rasa_core::layer::{Layer, LayerKind};
+use uuid::Uuid;
 
 use crate::tools::ActiveTool;
 
@@ -35,6 +36,9 @@ pub fn tool_palette(ui: &mut egui::Ui, active: &mut ActiveTool) {
 }
 
 /// Layer panel — list of layers with controls.
+///
+/// Renders nested group layers with indentation and supports multi-select
+/// via ctrl-click (toggle) and shift-click (extend).
 pub fn layer_panel(ui: &mut egui::Ui, doc: &mut Document) {
     ui.heading("Layers");
     ui.separator();
@@ -48,53 +52,73 @@ pub fn layer_panel(ui: &mut egui::Ui, doc: &mut Document) {
 
     ui.separator();
 
-    // Layer list (top = highest, bottom = lowest)
-    let active_id = doc.active_layer;
+    // Flatten the layer tree for display (with depth for indentation)
+    let flat = flatten_layers(&doc.layers);
     let mut action: Option<LayerAction> = None;
 
     egui::ScrollArea::vertical()
         .max_height(300.0)
         .show(ui, |ui| {
-            for i in (0..doc.layers.len()).rev() {
-                let layer = &doc.layers[i];
-                let is_active = active_id == Some(layer.id);
-                let layer_id = layer.id;
+            for entry in flat.iter().rev() {
+                let is_selected = doc.layer_selection.contains(&entry.id);
+                let is_primary = doc.active_layer == Some(entry.id);
 
-                let frame = if is_active {
-                    egui::Frame::NONE
-                        .fill(egui::Color32::from_gray(60))
-                        .inner_margin(4.0)
+                let fill = if is_primary {
+                    egui::Color32::from_gray(60)
+                } else if is_selected {
+                    egui::Color32::from_gray(45)
                 } else {
-                    egui::Frame::NONE.inner_margin(4.0)
+                    egui::Color32::TRANSPARENT
                 };
 
-                frame.show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        // Visibility toggle
-                        let mut visible = layer.visible;
-                        if ui.checkbox(&mut visible, "").changed() {
-                            action = Some(LayerAction::SetVisibility(layer_id, visible));
-                        }
+                let indent = (entry.depth as i8).min(7) * 16;
+                egui::Frame::NONE
+                    .fill(fill)
+                    .inner_margin(egui::Margin {
+                        left: 4 + indent,
+                        right: 4,
+                        top: 2,
+                        bottom: 2,
+                    })
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            // Visibility toggle
+                            let mut visible = entry.visible;
+                            if ui.checkbox(&mut visible, "").changed() {
+                                action = Some(LayerAction::SetVisibility(entry.id, visible));
+                            }
 
-                        // Layer name (click to select)
-                        let resp = ui.selectable_label(is_active, &layer.name);
-                        if resp.clicked() {
-                            action = Some(LayerAction::Select(layer_id));
-                        }
+                            // Group indicator
+                            if entry.is_group {
+                                ui.label("▸");
+                            }
 
-                        // Opacity
-                        ui.label(format!("{:.0}%", layer.opacity * 100.0));
+                            // Layer name — click handling with modifier keys
+                            let resp = ui.selectable_label(is_primary, &entry.name);
+                            if resp.clicked() {
+                                let modifiers = ui.input(|i| i.modifiers);
+                                if modifiers.ctrl || modifiers.command {
+                                    action = Some(LayerAction::Toggle(entry.id));
+                                } else if modifiers.shift {
+                                    action = Some(LayerAction::Extend(entry.id));
+                                } else {
+                                    action = Some(LayerAction::Select(entry.id));
+                                }
+                            }
+
+                            // Opacity
+                            ui.label(format!("{:.0}%", entry.opacity * 100.0));
+                        });
                     });
-                });
             }
         });
 
     // Apply deferred actions
     if let Some(a) = action {
         match a {
-            LayerAction::Select(id) => {
-                doc.active_layer = Some(id);
-            }
+            LayerAction::Select(id) => doc.select_layer(id),
+            LayerAction::Toggle(id) => doc.toggle_layer_selection(id),
+            LayerAction::Extend(id) => doc.extend_layer_selection(id),
             LayerAction::SetVisibility(id, vis) => {
                 let _ = doc.set_layer_visibility(id, vis);
             }
@@ -291,8 +315,44 @@ pub fn history_panel(ui: &mut egui::Ui, doc: &mut Document) {
 }
 
 enum LayerAction {
-    Select(uuid::Uuid),
-    SetVisibility(uuid::Uuid, bool),
+    Select(Uuid),
+    Toggle(Uuid),
+    Extend(Uuid),
+    SetVisibility(Uuid, bool),
+}
+
+/// A flattened layer entry for display, with depth for indentation.
+struct FlatLayerEntry {
+    id: Uuid,
+    name: String,
+    visible: bool,
+    opacity: f32,
+    depth: usize,
+    is_group: bool,
+}
+
+/// Recursively flatten the layer tree into a display list with depth.
+fn flatten_layers(layers: &[Layer]) -> Vec<FlatLayerEntry> {
+    let mut out = Vec::new();
+    flatten_layers_recursive(layers, 0, &mut out);
+    out
+}
+
+fn flatten_layers_recursive(layers: &[Layer], depth: usize, out: &mut Vec<FlatLayerEntry>) {
+    for layer in layers {
+        let is_group = matches!(layer.kind, LayerKind::Group { .. });
+        out.push(FlatLayerEntry {
+            id: layer.id,
+            name: layer.name.clone(),
+            visible: layer.visible,
+            opacity: layer.opacity,
+            depth,
+            is_group,
+        });
+        if let LayerKind::Group { children } = &layer.kind {
+            flatten_layers_recursive(children, depth + 1, out);
+        }
+    }
 }
 
 const ALL_BLEND_MODES: &[BlendMode] = &[
@@ -338,11 +398,49 @@ mod tests {
 
     #[test]
     fn expr_eval_in_numeric_fields() {
-        // Verify muharrir::expr is available and works
         let result = muharrir::expr::eval_f64("10 + 5");
         assert_eq!(result.unwrap(), 15.0);
 
         let result = muharrir::expr::eval_or("2 * 3.5", 0.0);
         assert_eq!(result, 7.0);
+    }
+
+    #[test]
+    fn flatten_layers_flat_list() {
+        use rasa_core::layer::Layer;
+        let layers = vec![
+            Layer::new_raster("A", 10, 10),
+            Layer::new_raster("B", 10, 10),
+        ];
+        let flat = flatten_layers(&layers);
+        assert_eq!(flat.len(), 2);
+        assert_eq!(flat[0].depth, 0);
+        assert_eq!(flat[1].depth, 0);
+        assert!(!flat[0].is_group);
+    }
+
+    #[test]
+    fn flatten_layers_with_group() {
+        use rasa_core::layer::{Layer, LayerKind};
+        let child1 = Layer::new_raster("Child 1", 10, 10);
+        let child2 = Layer::new_raster("Child 2", 10, 10);
+        let mut group = Layer::new_raster("Group", 10, 10);
+        group.kind = LayerKind::Group {
+            children: vec![child1, child2],
+        };
+        let bg = Layer::new_raster("Background", 10, 10);
+        let layers = vec![bg, group];
+        let flat = flatten_layers(&layers);
+        // Background(0), Group(0), Child1(1), Child2(1)
+        assert_eq!(flat.len(), 4);
+        assert_eq!(flat[0].name, "Background");
+        assert_eq!(flat[0].depth, 0);
+        assert_eq!(flat[1].name, "Group");
+        assert_eq!(flat[1].depth, 0);
+        assert!(flat[1].is_group);
+        assert_eq!(flat[2].name, "Child 1");
+        assert_eq!(flat[2].depth, 1);
+        assert_eq!(flat[3].name, "Child 2");
+        assert_eq!(flat[3].depth, 1);
     }
 }

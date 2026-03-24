@@ -81,7 +81,7 @@ pub fn import_psd(path: &Path) -> Result<Document, RasaError> {
         let layer_id = layer.id;
         doc.layers.push(layer);
         doc.pixel_data.push((layer_id, buf));
-        doc.active_layer = Some(layer_id);
+        doc.select_layer(layer_id);
     } else {
         for psd_layer in psd_layers {
             let layer_name = psd_layer.name();
@@ -134,7 +134,7 @@ pub fn import_psd(path: &Path) -> Result<Document, RasaError> {
         }
 
         if let Some(first) = doc.layers.first() {
-            doc.active_layer = Some(first.id);
+            doc.select_layer(first.id);
         }
     }
 

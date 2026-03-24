@@ -62,7 +62,7 @@ pub fn import_raw(path: &Path) -> Result<Document, RasaError> {
     doc.pixel_data.clear();
     doc.layers.push(layer);
     doc.pixel_data.push((layer_id, buf));
-    doc.active_layer = Some(layer_id);
+    doc.select_layer(layer_id);
 
     Ok(doc)
 }

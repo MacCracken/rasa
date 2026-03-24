@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use muharrir::command::Command as CommandTrait;
 use muharrir::dirty::DirtyState;
+use muharrir::history::Action;
+use muharrir::selection::Selection;
 
 use crate::color::{BlendMode, ColorSpace, IccProfile};
 use crate::command::{Command, History, apply_forward, apply_inverse};
@@ -9,6 +12,46 @@ use crate::error::RasaError;
 use crate::geometry::Size;
 use crate::layer::{Adjustment, Layer, LayerKind};
 use crate::pixel::PixelBuffer;
+
+/// Wrapper around `muharrir::history::History` that implements Debug and Clone
+/// (the upstream type does not derive them).
+pub struct AuditLog(muharrir::history::History);
+
+impl Default for AuditLog {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AuditLog {
+    pub fn new() -> Self {
+        Self(muharrir::history::History::new())
+    }
+
+    pub fn inner(&self) -> &muharrir::history::History {
+        &self.0
+    }
+
+    pub fn inner_mut(&mut self) -> &mut muharrir::history::History {
+        &mut self.0
+    }
+}
+
+impl std::fmt::Debug for AuditLog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuditLog")
+            .field("len", &self.0.len())
+            .finish()
+    }
+}
+
+impl Clone for AuditLog {
+    fn clone(&self) -> Self {
+        // Audit logs are not meaningfully clonable (the chain has integrity
+        // constraints), so we start a fresh log on clone.
+        Self::new()
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
@@ -20,6 +63,8 @@ pub struct Document {
     #[serde(default)]
     pub color_space: ColorSpace,
     pub layers: Vec<Layer>,
+    /// Primary active layer — kept in sync with `layer_selection.primary()`.
+    /// Serialized for backward compatibility with the project format.
     pub active_layer: Option<Uuid>,
     #[serde(skip)]
     pub pixel_data: Vec<(Uuid, PixelBuffer)>,
@@ -31,6 +76,13 @@ pub struct Document {
     /// Tracks whether the document has unsaved modifications.
     #[serde(skip)]
     pub dirty: DirtyState,
+    /// Multi-layer selection state. `primary()` returns the most recently
+    /// selected layer (equivalent to `active_layer`).
+    #[serde(skip)]
+    pub layer_selection: Selection<Uuid>,
+    /// Tamper-evident audit log recording every command applied to this document.
+    #[serde(skip)]
+    pub audit: Option<AuditLog>,
 }
 
 impl Document {
@@ -46,6 +98,8 @@ impl Document {
             bg_id,
             PixelBuffer::filled(width, height, crate::color::Color::WHITE),
         )];
+        let mut layer_selection = Selection::new();
+        layer_selection.select(bg_id);
         Self {
             id: Uuid::new_v4(),
             name: name.into(),
@@ -58,6 +112,8 @@ impl Document {
             icc_profile: None,
             history: Some(History::new(200)),
             dirty: DirtyState::new(),
+            layer_selection,
+            audit: Some(AuditLog::new()),
         }
     }
 
@@ -107,7 +163,9 @@ impl Document {
             index,
         };
         self.layers.insert(index, layer);
-        self.active_layer = Some(self.layers[index].id);
+        let id = self.layers[index].id;
+        self.layer_selection.select(id);
+        self.active_layer = Some(id);
         self.push_command(cmd);
     }
 
@@ -122,8 +180,12 @@ impl Document {
             layer: layer.clone(),
             index,
         };
+        self.layer_selection.remove(&id);
         if self.active_layer == Some(id) {
-            self.active_layer = self.layers.last().map(|l| l.id);
+            if let Some(last) = self.layers.last() {
+                self.layer_selection.select(last.id);
+            }
+            self.active_layer = self.layer_selection.primary().copied();
         }
         self.push_command(cmd);
         Ok(layer)
@@ -165,6 +227,7 @@ impl Document {
             index: insert_at,
         };
         self.layers.insert(insert_at, new_layer);
+        self.layer_selection.select(new_id);
         self.active_layer = Some(new_id);
         self.push_command(cmd);
         Ok(new_id)
@@ -255,6 +318,7 @@ impl Document {
             index,
         };
         self.layers.insert(index, layer);
+        self.layer_selection.select(id);
         self.active_layer = Some(id);
         self.push_command(cmd);
         id
@@ -344,6 +408,7 @@ impl Document {
         self.layers.remove(upper_idx);
         self.pixel_data.retain(|(id, _)| *id != upper_layer.id);
 
+        self.layer_selection.select(lower_layer.id);
         self.active_layer = Some(lower_layer.id);
         self.push_command(Command::MergeLayers {
             upper_layer: Box::new(upper_layer),
@@ -419,6 +484,7 @@ impl Document {
             group_index,
         };
         self.layers.insert(group_index, group);
+        self.layer_selection.select(group_id);
         self.active_layer = Some(group_id);
         self.push_command(cmd);
         Ok(group_id)
@@ -454,6 +520,9 @@ impl Document {
             self.layers.insert(group_idx + i, child);
         }
 
+        if let Some(&first) = child_ids.first() {
+            self.layer_selection.select(first);
+        }
         self.active_layer = child_ids.first().copied();
         self.push_command(Command::UngroupLayer {
             group: Box::new(group_layer),
@@ -463,6 +532,31 @@ impl Document {
         Ok(child_ids)
     }
 
+    // ── Selection helpers ────────────────────────────────
+
+    /// Select a single layer (replacing the current selection).
+    pub fn select_layer(&mut self, id: Uuid) {
+        self.layer_selection.select(id);
+        self.active_layer = Some(id);
+    }
+
+    /// Toggle a layer in the selection (ctrl-click behavior).
+    pub fn toggle_layer_selection(&mut self, id: Uuid) {
+        self.layer_selection.toggle(id);
+        self.active_layer = self.layer_selection.primary().copied();
+    }
+
+    /// Add a layer to the selection (shift-click behavior).
+    pub fn extend_layer_selection(&mut self, id: Uuid) {
+        self.layer_selection.add(id);
+        self.active_layer = self.layer_selection.primary().copied();
+    }
+
+    /// Returns the IDs of all currently selected layers.
+    pub fn selected_layers(&self) -> &[Uuid] {
+        self.layer_selection.items()
+    }
+
     // ── Undo / Redo ────────────────────────────────────
 
     fn history_mut(&mut self) -> &mut History {
@@ -470,6 +564,14 @@ impl Document {
     }
 
     fn push_command(&mut self, cmd: Command) {
+        // Record in audit log
+        if let Some(audit) = &mut self.audit {
+            let desc = cmd.description().to_string();
+            let json = serde_json::json!({ "command": &desc });
+            audit
+                .inner_mut()
+                .record("rasa", Action::with_kind(desc, json));
+        }
         self.history_mut().push(cmd);
         self.dirty.mark_dirty();
     }
@@ -489,6 +591,7 @@ impl Document {
             .ok_or(RasaError::NothingToUndo)?
             .clone();
         apply_inverse(&cmd, self);
+        self.sync_selection_to_layers();
         self.dirty.mark_dirty();
         Ok(())
     }
@@ -500,8 +603,33 @@ impl Document {
             .ok_or(RasaError::NothingToRedo)?
             .clone();
         apply_forward(&cmd, self);
+        self.sync_selection_to_layers();
         self.dirty.mark_dirty();
         Ok(())
+    }
+
+    /// Prune stale UUIDs from `layer_selection` and re-sync `active_layer`.
+    /// Called after undo/redo which may add/remove layers without going through
+    /// the selection helpers.
+    fn sync_selection_to_layers(&mut self) {
+        // Remove any selected IDs that no longer exist in the layer stack
+        let stale: Vec<Uuid> = self
+            .layer_selection
+            .items()
+            .iter()
+            .filter(|id| self.find_layer(**id).is_none())
+            .copied()
+            .collect();
+        for id in stale {
+            self.layer_selection.remove(&id);
+        }
+        // If selection is empty but we have layers, select the last one
+        if self.layer_selection.is_empty() && !self.layers.is_empty() {
+            if let Some(last) = self.layers.last() {
+                self.layer_selection.select(last.id);
+            }
+        }
+        self.active_layer = self.layer_selection.primary().copied();
     }
 
     /// Mark the document as saved (clean).
@@ -1136,5 +1264,126 @@ mod tests {
     fn new_document_has_no_icc_profile() {
         let doc = Document::new("Test", 100, 100);
         assert!(doc.icc_profile.is_none());
+    }
+
+    // ── Multi-selection tests ───────────────────────────
+
+    #[test]
+    fn new_document_has_single_selection() {
+        let doc = Document::new("Test", 100, 100);
+        assert_eq!(doc.layer_selection.len(), 1);
+        assert_eq!(doc.layer_selection.primary().copied(), doc.active_layer);
+    }
+
+    #[test]
+    fn select_layer_updates_both() {
+        let mut doc = Document::new("Test", 100, 100);
+        let l = Layer::new_raster("L1", 100, 100);
+        let id = l.id;
+        doc.add_layer(l);
+        doc.select_layer(id);
+        assert_eq!(doc.active_layer, Some(id));
+        assert_eq!(doc.layer_selection.primary(), Some(&id));
+        assert!(doc.layer_selection.is_single());
+    }
+
+    #[test]
+    fn toggle_layer_selection_multi() {
+        let mut doc = Document::new("Test", 100, 100);
+        let bg_id = doc.layers[0].id;
+        let l = Layer::new_raster("L1", 100, 100);
+        let l_id = l.id;
+        doc.add_layer(l);
+        // Start with L1 selected (from add_layer)
+        assert_eq!(doc.active_layer, Some(l_id));
+        // Toggle bg into the selection
+        doc.toggle_layer_selection(bg_id);
+        assert_eq!(doc.layer_selection.len(), 2);
+        assert!(doc.layer_selection.contains(&bg_id));
+        assert!(doc.layer_selection.contains(&l_id));
+    }
+
+    #[test]
+    fn extend_layer_selection() {
+        let mut doc = Document::new("Test", 100, 100);
+        let bg_id = doc.layers[0].id;
+        let l = Layer::new_raster("L1", 100, 100);
+        let l_id = l.id;
+        doc.add_layer(l);
+        doc.select_layer(bg_id);
+        doc.extend_layer_selection(l_id);
+        assert_eq!(doc.layer_selection.len(), 2);
+        // Primary is the most recently added
+        assert_eq!(doc.layer_selection.primary(), Some(&l_id));
+        assert_eq!(doc.active_layer, Some(l_id));
+    }
+
+    #[test]
+    fn remove_layer_clears_from_selection() {
+        let mut doc = Document::new("Test", 100, 100);
+        let l = Layer::new_raster("L1", 100, 100);
+        let l_id = l.id;
+        doc.add_layer(l);
+        assert!(doc.layer_selection.contains(&l_id));
+        doc.remove_layer(l_id).unwrap();
+        assert!(!doc.layer_selection.contains(&l_id));
+    }
+
+    #[test]
+    fn selection_syncs_after_undo_add() {
+        let mut doc = Document::new("Test", 100, 100);
+        let l = Layer::new_raster("L1", 100, 100);
+        let l_id = l.id;
+        doc.add_layer(l);
+        assert!(doc.layer_selection.contains(&l_id));
+        doc.undo().unwrap();
+        // After undoing AddLayer, the layer is gone — selection should not contain it
+        assert!(!doc.layer_selection.contains(&l_id));
+        assert!(doc.active_layer.is_some()); // should fall back to background
+    }
+
+    #[test]
+    fn selection_syncs_after_redo_remove() {
+        let mut doc = Document::new("Test", 100, 100);
+        let l = Layer::new_raster("L1", 100, 100);
+        let l_id = l.id;
+        doc.add_layer(l);
+        doc.remove_layer(l_id).unwrap();
+        doc.undo().unwrap(); // re-adds layer
+        assert_eq!(doc.layers.len(), 2);
+        doc.redo().unwrap(); // re-removes layer
+        assert!(!doc.layer_selection.contains(&l_id));
+        assert_eq!(doc.layers.len(), 1);
+    }
+
+    // ── Audit log tests ─────────────────────────────────
+
+    #[test]
+    fn audit_log_records_commands() {
+        let mut doc = Document::new("Test", 100, 100);
+        assert!(doc.audit.is_some());
+        let initial_len = doc.audit.as_ref().unwrap().inner().len();
+        doc.add_layer(Layer::new_raster("L1", 100, 100));
+        doc.add_layer(Layer::new_raster("L2", 100, 100));
+        let audit = doc.audit.as_ref().unwrap().inner();
+        assert_eq!(audit.len(), initial_len + 2);
+    }
+
+    #[test]
+    fn audit_log_integrity() {
+        let mut doc = Document::new("Test", 100, 100);
+        doc.add_layer(Layer::new_raster("L1", 100, 100));
+        let audit = doc.audit.as_ref().unwrap().inner();
+        assert!(audit.verify());
+    }
+
+    #[test]
+    fn audit_log_survives_undo_redo() {
+        let mut doc = Document::new("Test", 100, 100);
+        doc.add_layer(Layer::new_raster("L1", 100, 100));
+        let len_after_add = doc.audit.as_ref().unwrap().inner().len();
+        doc.undo().unwrap();
+        // Undo doesn't add to audit (it's the undo stack's job)
+        assert_eq!(doc.audit.as_ref().unwrap().inner().len(), len_after_add);
     }
 }
