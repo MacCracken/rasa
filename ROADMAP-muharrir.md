@@ -7,15 +7,20 @@ muharrir and subsequent adoption in rasa.
 ## Completed (v0.23.3)
 
 - [x] **command** — `Command` trait implemented on rasa `Command` enum; `CommandHistory` and `CompoundCommand` re-exported for external consumers
-- [x] **dirty** — `DirtyState` added to `Document` for unsaved-change tracking
-- [x] **hierarchy** — Available for layer tree display (build_hierarchy / flatten)
-- [x] **inspector** — `PropertySheet` used for structured layer property inspection
-- [x] **notification** — `Toasts` + `NotificationLog` replace ad-hoc status messages
-- [x] **selection** — `PanelStates` used for panel visibility management
-- [x] **recent** — `RecentFiles` for file history persistence
-- [x] **prefs** — `PrefsStore` + `config_dir` for preferences persistence
-- [x] **expr** — `eval_f64` / `eval_or` available for numeric input expression evaluation
-- [x] **hw** — `HardwareProfile` + `QualityTier` for GPU detection and quality tier selection
+- [x] **dirty** — `DirtyState` added to `Document` for unsaved-change tracking; status bar shows `(modified)`, export marks clean, quit warns on unsaved
+- [x] **inspector** — `PropertySheet` used for structured layer property inspection in collapsible Inspector panel
+- [x] **notification** — `Toasts` + `NotificationLog` replace ad-hoc status messages; toast overlay with severity-colored badges
+- [x] **selection** — `PanelStates` used for panel visibility management (View menu toggles)
+- [x] **recent** — `RecentFiles` for file history persistence; File > Open Recent submenu
+- [x] **prefs** — `PrefsStore` + `config_dir` for preferences persistence (`~/.config/rasa/`)
+- [x] **expr** — `eval_f64` wired into brush size text input for expression evaluation (e.g. "10+5")
+- [x] **hw** — `HardwareProfile` + `QualityTier` integrated into `select_backend()` — probes hardware before GPU init, falls back to CPU on Low tier
+
+## Available but not yet integrated
+
+- [ ] **hierarchy** — `build_hierarchy` / `flatten` available for layer tree display; not yet used because the current flat `Vec<Layer>` iteration is sufficient. Will integrate when drag-and-drop reordering or nested group display is added.
+- [ ] **history** (audit) — `muharrir::history::History` provides tamper-evident audit logging via `libro::AuditChain`. Not yet integrated alongside undo/redo. Blocked on reconciling the two history models (undo stack vs audit chain).
+- [ ] **selection** (item) — `muharrir::selection::Selection<T>` available for multi-item selection (e.g. selecting multiple layers). Currently only single active_layer is tracked. Will integrate when multi-layer selection is added.
 
 ## Roadmap — pending muharrir upstream
 
@@ -59,11 +64,6 @@ muharrir and subsequent adoption in rasa.
 - rasa uses an apply-then-record pattern (apply inline, then push command)
 - A `push_recorded(cmd)` method would enable rasa to fully adopt `CommandHistory`
 - Alternatively, an `execute_pre_applied` variant
-
-### Audit Chain Integration
-- muharrir `history::History` provides tamper-evident audit logging via `libro`
-- Could be integrated alongside undo/redo for compliance/tracking
-- Blocked on reconciling the two history models (undo stack vs audit chain)
 
 ### Personality / Theming
 - muharrir `personality` feature (via `bhava`) for app theming

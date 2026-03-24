@@ -129,6 +129,25 @@ pub fn layer_panel(ui: &mut egui::Ui, doc: &mut Document) {
                     }
                 });
         }
+
+        // Inspector — structured property sheet for the active layer
+        let sheet = build_layer_property_sheet(doc);
+        if !sheet.is_empty() {
+            ui.separator();
+            egui::CollapsingHeader::new("Inspector")
+                .default_open(false)
+                .show(ui, |ui| {
+                    for category in sheet.categories() {
+                        ui.label(egui::RichText::new(category).strong());
+                        for prop in sheet.by_category(category) {
+                            ui.horizontal(|ui| {
+                                ui.label(format!("{}:", prop.name));
+                                ui.label(&prop.value);
+                            });
+                        }
+                    }
+                });
+        }
     }
 }
 
@@ -190,7 +209,7 @@ pub fn properties_panel(
     match tool {
         ActiveTool::Brush | ActiveTool::Eraser => {
             ui.label("Size:");
-            ui.add(egui::Slider::new(size, 1.0..=200.0).logarithmic(true));
+            expr_slider(ui, "brush_size", size, 1.0..=200.0, true);
             ui.label("Opacity:");
             ui.add(egui::Slider::new(opacity, 0.0..=1.0));
             ui.label("Hardness:");
@@ -213,6 +232,36 @@ pub fn properties_panel(
         (color[2] * 255.0) as u8,
     );
     ui.label(&hex);
+}
+
+/// A slider with a text field that supports expression evaluation via muharrir::expr.
+///
+/// The user can type math expressions like "10+5" or "200/3" and the field
+/// evaluates them on defocus. Falls back to the slider value if parsing fails.
+fn expr_slider(
+    ui: &mut egui::Ui,
+    _id: &str,
+    value: &mut f32,
+    range: std::ops::RangeInclusive<f32>,
+    logarithmic: bool,
+) {
+    ui.horizontal(|ui| {
+        let mut slider = egui::Slider::new(value, range.clone());
+        if logarithmic {
+            slider = slider.logarithmic(true);
+        }
+        ui.add(slider);
+
+        // Small text field for direct entry / expression evaluation
+        let mut text = format!("{:.1}", *value);
+        let resp = ui.add(egui::TextEdit::singleline(&mut text).desired_width(50.0));
+        if resp.lost_focus()
+            && let Ok(v) = muharrir::expr::eval_f64(&text)
+        {
+            let v = (v as f32).clamp(*range.start(), *range.end());
+            *value = v;
+        }
+    });
 }
 
 /// History panel — undo/redo controls with command descriptions.

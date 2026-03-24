@@ -100,13 +100,26 @@ pub fn select_backend(force_cpu: bool) -> Box<dyn RenderBackend> {
         return Box::new(CpuBackend);
     }
 
+    // Probe hardware via muharrir to decide whether GPU is worthwhile
+    let (profile, hw_force_cpu) = super::hw::detect_and_select();
+    if hw_force_cpu {
+        tracing::info!(
+            "Hardware profile recommends CPU (device={}, tier={})",
+            profile.device_name,
+            profile.quality,
+        );
+        return Box::new(CpuBackend);
+    }
+
     // Try GPU backend
     match super::device::GpuDevice::new() {
         Ok(device) => {
             tracing::info!(
-                "GPU backend: {} ({})",
+                "GPU backend: {} ({}) — quality={}, VRAM={}",
                 device.adapter_name(),
-                device.backend_name()
+                device.backend_name(),
+                profile.quality,
+                profile.gpu_memory_display(),
             );
             Box::new(GpuBackend { device })
         }

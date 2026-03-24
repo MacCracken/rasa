@@ -60,6 +60,8 @@ pub struct RasaApp {
     pub panel_states: PanelStates,
     /// Set when the user clicks Quit with unsaved changes — next Quit confirms.
     confirm_quit: bool,
+    /// Cached config directory for preferences and recent files.
+    config_dir: PathBuf,
 }
 
 impl RasaApp {
@@ -88,13 +90,15 @@ impl RasaApp {
             plugin_manager.init_all(&mut ctx);
         }
 
+        // Resolve config directory once
+        let config_dir = muharrir::prefs::config_dir("rasa");
+
         // Load persisted preferences
-        let prefs_path = muharrir::prefs::config_dir("rasa").join("prefs.json");
-        let prefs: AppPrefs = PrefsStore::load_or_default(&prefs_path);
+        let prefs: AppPrefs = PrefsStore::load_or_default(&config_dir.join("prefs.json"));
 
         // Load recent files
-        let recent_path = muharrir::prefs::config_dir("rasa").join("recent.json");
-        let recent_files: RecentFiles = PrefsStore::load_or_default(&recent_path);
+        let recent_files: RecentFiles =
+            PrefsStore::load_or_default(&config_dir.join("recent.json"));
 
         // Panel visibility
         let mut panel_states = PanelStates::new();
@@ -116,6 +120,7 @@ impl RasaApp {
             recent_files,
             panel_states,
             confirm_quit: false,
+            config_dir,
         }
     }
 
@@ -128,14 +133,12 @@ impl RasaApp {
 
     /// Save preferences to disk.
     fn save_prefs(&self) {
-        let prefs_path = muharrir::prefs::config_dir("rasa").join("prefs.json");
-        let _ = PrefsStore::save(&self.prefs, &prefs_path);
+        let _ = PrefsStore::save(&self.prefs, &self.config_dir.join("prefs.json"));
     }
 
     /// Save recent files to disk.
     fn save_recent(&self) {
-        let recent_path = muharrir::prefs::config_dir("rasa").join("recent.json");
-        let _ = PrefsStore::save(&self.recent_files, &recent_path);
+        let _ = PrefsStore::save(&self.recent_files, &self.config_dir.join("recent.json"));
     }
 
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
@@ -588,6 +591,7 @@ mod tests {
             recent_files: RecentFiles::new(),
             panel_states: PanelStates::new(),
             confirm_quit: false,
+            config_dir: std::env::temp_dir().join("rasa-test"),
         };
         assert!(app.document.is_some());
         assert_eq!(app.active_tool, ActiveTool::Brush);
