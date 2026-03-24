@@ -14,7 +14,7 @@ thiserror = { workspace = true }
 ranga = { workspace = true }
 
 kurbo = { workspace = true }
-muharrir = { workspace = true, features = ["command", "dirty", "hierarchy", "history"] }
+muharrir = { workspace = true, features = ["command", "dirty"] }
 
 [dev-dependencies]
 serde_json = { workspace = true }

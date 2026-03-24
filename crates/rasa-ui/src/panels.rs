@@ -176,9 +176,6 @@ pub fn build_layer_property_sheet(doc: &Document) -> PropertySheet {
 }
 
 /// Properties panel — tool settings and color picker.
-///
-/// Numeric fields support expression evaluation via muharrir::expr
-/// (e.g., typing "10+5" in the size field evaluates to 15).
 pub fn properties_panel(
     ui: &mut egui::Ui,
     tool: &ActiveTool,

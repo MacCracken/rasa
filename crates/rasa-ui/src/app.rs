@@ -58,6 +58,8 @@ pub struct RasaApp {
     pub recent_files: RecentFiles,
     /// Panel visibility state.
     pub panel_states: PanelStates,
+    /// Set when the user clicks Quit with unsaved changes — next Quit confirms.
+    confirm_quit: bool,
 }
 
 impl RasaApp {
@@ -113,6 +115,7 @@ impl RasaApp {
             notifications: NotificationLog::new(),
             recent_files,
             panel_states,
+            confirm_quit: false,
         }
     }
 
@@ -228,9 +231,24 @@ impl RasaApp {
                     ui.close_menu();
                 }
                 ui.separator();
-                if ui.button("Quit").clicked() {
+                let has_unsaved = self.document.as_ref().is_some_and(|d| d.dirty.is_dirty());
+                let quit_label = if has_unsaved && !self.confirm_quit {
+                    "Quit (unsaved changes)"
+                } else {
+                    "Quit"
+                };
+                if ui.button(quit_label).clicked() {
                     self.save_prefs();
-                    std::process::exit(0);
+                    if has_unsaved && !self.confirm_quit {
+                        self.confirm_quit = true;
+                        self.notify(
+                            "Unsaved changes — click Quit again to discard",
+                            Severity::Warning,
+                        );
+                        ui.close_menu();
+                    } else {
+                        std::process::exit(0);
+                    }
                 }
             });
 
@@ -342,6 +360,8 @@ impl RasaApp {
     }
 
     fn handle_keyboard(&mut self, ctx: &egui::Context) {
+        // Any key press resets the quit confirmation
+        self.confirm_quit = false;
         let modifiers = ctx.input(|i| i.modifiers);
 
         ctx.input(|i| {
@@ -567,6 +587,7 @@ mod tests {
             notifications: NotificationLog::new(),
             recent_files: RecentFiles::new(),
             panel_states: PanelStates::new(),
+            confirm_quit: false,
         };
         assert!(app.document.is_some());
         assert_eq!(app.active_tool, ActiveTool::Brush);
