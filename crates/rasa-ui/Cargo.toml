@@ -17,4 +17,7 @@ uuid = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
 rfd = { workspace = true }
+muharrir = { workspace = true, features = ["notification", "selection", "inspector", "recent", "prefs", "expr", "hierarchy"] }
+serde_json = { workspace = true }

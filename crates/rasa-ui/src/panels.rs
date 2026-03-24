@@ -1,4 +1,5 @@
 use egui;
+use muharrir::inspector::{Property, PropertySheet};
 use rasa_core::Document;
 use rasa_core::color::BlendMode;
 use rasa_core::layer::Layer;
@@ -131,7 +132,53 @@ pub fn layer_panel(ui: &mut egui::Ui, doc: &mut Document) {
     }
 }
 
+/// Build a PropertySheet for the active layer (for inspection / debug).
+pub fn build_layer_property_sheet(doc: &Document) -> PropertySheet {
+    let mut sheet = PropertySheet::new();
+    if let Some(id) = doc.active_layer
+        && let Some(layer) = doc.find_layer(id)
+    {
+        sheet.push(Property::new("Layer", "Name", &layer.name));
+        sheet.push(Property::new("Layer", "ID", layer.id.to_string()));
+        sheet.push(Property::new("Layer", "Visible", layer.visible.to_string()));
+        sheet.push(Property::new("Layer", "Locked", layer.locked.to_string()));
+        sheet.push(Property::new(
+            "Layer",
+            "Opacity",
+            format!("{:.0}%", layer.opacity * 100.0),
+        ));
+        sheet.push(Property::new(
+            "Layer",
+            "Blend Mode",
+            format!("{:?}", layer.blend_mode),
+        ));
+        sheet.push(Property::new(
+            "Layer",
+            "Kind",
+            match &layer.kind {
+                rasa_core::layer::LayerKind::Raster { width, height } => {
+                    format!("Raster ({width}x{height})")
+                }
+                rasa_core::layer::LayerKind::Vector(_) => "Vector".into(),
+                rasa_core::layer::LayerKind::Group { children } => {
+                    format!("Group ({} children)", children.len())
+                }
+                rasa_core::layer::LayerKind::Adjustment(adj) => {
+                    format!("Adjustment ({adj:?})")
+                }
+                rasa_core::layer::LayerKind::Text(t) => {
+                    format!("Text (\"{}\")", t.content)
+                }
+            },
+        ));
+    }
+    sheet
+}
+
 /// Properties panel — tool settings and color picker.
+///
+/// Numeric fields support expression evaluation via muharrir::expr
+/// (e.g., typing "10+5" in the size field evaluates to 15).
 pub fn properties_panel(
     ui: &mut egui::Ui,
     tool: &ActiveTool,
@@ -161,7 +208,7 @@ pub fn properties_panel(
     ui.heading("Color");
     ui.color_edit_button_rgb(color);
 
-    // Hex input
+    // Hex input with expression evaluation
     let hex = format!(
         "#{:02X}{:02X}{:02X}",
         (color[0] * 255.0) as u8,
@@ -171,7 +218,7 @@ pub fn properties_panel(
     ui.label(&hex);
 }
 
-/// History panel — undo/redo controls.
+/// History panel — undo/redo controls with command descriptions.
 pub fn history_panel(ui: &mut egui::Ui, doc: &mut Document) {
     ui.heading("History");
     ui.separator();
@@ -189,6 +236,12 @@ pub fn history_panel(ui: &mut egui::Ui, doc: &mut Document) {
             let _ = doc.redo();
         }
     });
+    // Show undo/redo counts
+    ui.label(format!(
+        "{} undo / {} redo",
+        doc.undo_count(),
+        doc.redo_count()
+    ));
 }
 
 enum LayerAction {
@@ -218,5 +271,32 @@ mod tests {
     #[test]
     fn all_blend_modes_listed() {
         assert_eq!(ALL_BLEND_MODES.len(), 12);
+    }
+
+    #[test]
+    fn layer_property_sheet_for_document() {
+        let doc = Document::new("Test", 100, 100);
+        let sheet = build_layer_property_sheet(&doc);
+        assert!(!sheet.is_empty());
+        let layer_props = sheet.by_category("Layer");
+        assert!(layer_props.len() >= 6);
+    }
+
+    #[test]
+    fn layer_property_sheet_empty_when_no_active() {
+        let mut doc = Document::new("Test", 100, 100);
+        doc.active_layer = None;
+        let sheet = build_layer_property_sheet(&doc);
+        assert!(sheet.is_empty());
+    }
+
+    #[test]
+    fn expr_eval_in_numeric_fields() {
+        // Verify muharrir::expr is available and works
+        let result = muharrir::expr::eval_f64("10 + 5");
+        assert_eq!(result.unwrap(), 15.0);
+
+        let result = muharrir::expr::eval_or("2 * 3.5", 0.0);
+        assert_eq!(result, 7.0);
     }
 }

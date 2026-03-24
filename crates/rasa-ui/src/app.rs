@@ -1,8 +1,13 @@
 use std::path::PathBuf;
 
 use egui;
+use muharrir::notification::{NotificationLog, Severity, Toasts};
+use muharrir::prefs::PrefsStore;
+use muharrir::recent::RecentFiles;
+use muharrir::selection::PanelStates;
 use rasa_core::Document;
 use rasa_core::layer::Layer;
+use serde::{Deserialize, Serialize};
 
 use rasa_engine::filter::FilterRegistry;
 
@@ -12,21 +17,47 @@ use crate::plugin::{PluginContext, PluginManager};
 use crate::tool::ToolRegistry;
 use crate::tools::ActiveTool;
 
+/// Persisted user preferences.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppPrefs {
+    pub show_pixel_grid: bool,
+    pub show_rulers: bool,
+    pub brush_size: f32,
+    pub brush_opacity: f32,
+    pub brush_hardness: f32,
+    pub primary_color: [f32; 3],
+}
+
+impl Default for AppPrefs {
+    fn default() -> Self {
+        Self {
+            show_pixel_grid: false,
+            show_rulers: true,
+            brush_size: 10.0,
+            brush_opacity: 1.0,
+            brush_hardness: 0.8,
+            primary_color: [0.0, 0.0, 0.0],
+        }
+    }
+}
+
 /// Main application state.
 pub struct RasaApp {
     pub document: Option<Document>,
     pub canvas: CanvasState,
     pub active_tool: ActiveTool,
-    pub brush_size: f32,
-    pub brush_opacity: f32,
-    pub brush_hardness: f32,
-    pub primary_color: [f32; 3],
-    pub show_pixel_grid: bool,
-    pub show_rulers: bool,
-    pub status_message: String,
+    pub prefs: AppPrefs,
     pub filter_registry: FilterRegistry,
     pub tool_registry: ToolRegistry,
     pub plugin_manager: PluginManager,
+    /// Toast notifications (ephemeral, auto-expire).
+    pub toasts: Toasts,
+    /// Persistent notification log.
+    pub notifications: NotificationLog,
+    /// Recently opened files.
+    pub recent_files: RecentFiles,
+    /// Panel visibility state.
+    pub panel_states: PanelStates,
 }
 
 impl RasaApp {
@@ -55,21 +86,53 @@ impl RasaApp {
             plugin_manager.init_all(&mut ctx);
         }
 
+        // Load persisted preferences
+        let prefs_path = muharrir::prefs::config_dir("rasa").join("prefs.json");
+        let prefs: AppPrefs = PrefsStore::load_or_default(&prefs_path);
+
+        // Load recent files
+        let recent_path = muharrir::prefs::config_dir("rasa").join("recent.json");
+        let recent_files: RecentFiles = PrefsStore::load_or_default(&recent_path);
+
+        // Panel visibility
+        let mut panel_states = PanelStates::new();
+        panel_states.register("tool_palette", true);
+        panel_states.register("layer_panel", true);
+        panel_states.register("properties", true);
+        panel_states.register("history", true);
+
         Self {
             document: Some(Document::new("Untitled", 800, 600)),
             canvas: CanvasState::default(),
             active_tool: ActiveTool::Brush,
-            brush_size: 10.0,
-            brush_opacity: 1.0,
-            brush_hardness: 0.8,
-            primary_color: [0.0, 0.0, 0.0],
-            show_pixel_grid: false,
-            show_rulers: true,
-            status_message: "Ready".into(),
+            prefs,
             filter_registry,
             tool_registry,
             plugin_manager,
+            toasts: Toasts::new(),
+            notifications: NotificationLog::new(),
+            recent_files,
+            panel_states,
         }
+    }
+
+    /// Push a notification and show a toast.
+    fn notify(&mut self, message: impl Into<String>, severity: Severity) {
+        let msg: String = message.into();
+        self.toasts.push(&msg, severity);
+        self.notifications.push(&msg, severity, "rasa-ui");
+    }
+
+    /// Save preferences to disk.
+    fn save_prefs(&self) {
+        let prefs_path = muharrir::prefs::config_dir("rasa").join("prefs.json");
+        let _ = PrefsStore::save(&self.prefs, &prefs_path);
+    }
+
+    /// Save recent files to disk.
+    fn save_recent(&self) {
+        let recent_path = muharrir::prefs::config_dir("rasa").join("recent.json");
+        let _ = PrefsStore::save(&self.recent_files, &recent_path);
     }
 
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
@@ -77,22 +140,57 @@ impl RasaApp {
             ui.menu_button("File", |ui| {
                 if ui.button("New (Ctrl+N)").clicked() {
                     self.document = Some(Document::new("Untitled", 800, 600));
-                    self.status_message = "New document created".into();
+                    self.notify("New document created", Severity::Info);
                     ui.close_menu();
                 }
                 if ui.button("Open... (Ctrl+O)").clicked() {
                     if let Some(path) = rfd_open_file() {
                         match rasa_storage::import::import_image(&path) {
                             Ok(doc) => {
-                                self.status_message = format!("Opened: {}", path.display());
+                                self.notify(format!("Opened: {}", path.display()), Severity::Info);
                                 self.document = Some(doc);
+                                self.recent_files.add(&path);
+                                self.save_recent();
                             }
                             Err(e) => {
-                                self.status_message = format!("Error: {e}");
+                                self.notify(format!("Error: {e}"), Severity::Error);
                             }
                         }
                     }
                     ui.close_menu();
+                }
+                // Recent files submenu
+                if !self.recent_files.is_empty() {
+                    ui.menu_button("Open Recent", |ui| {
+                        let entries: Vec<PathBuf> = self.recent_files.entries().to_vec();
+                        for path in &entries {
+                            let label = path
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| path.display().to_string());
+                            if ui
+                                .button(&label)
+                                .on_hover_text(path.display().to_string())
+                                .clicked()
+                            {
+                                match rasa_storage::import::import_image(path) {
+                                    Ok(doc) => {
+                                        self.notify(
+                                            format!("Opened: {}", path.display()),
+                                            Severity::Info,
+                                        );
+                                        self.document = Some(doc);
+                                        self.recent_files.add(path);
+                                        self.save_recent();
+                                    }
+                                    Err(e) => {
+                                        self.notify(format!("Error: {e}"), Severity::Error);
+                                    }
+                                }
+                                ui.close_menu();
+                            }
+                        }
+                    });
                 }
                 ui.separator();
                 if ui.button("Export... (Ctrl+Shift+E)").clicked() {
@@ -106,17 +204,23 @@ impl RasaApp {
                                 match rasa_storage::format::ExportSettings::for_format(fmt) {
                                     Ok(s) => s,
                                     Err(e) => {
-                                        self.status_message = format!("Export error: {e}");
+                                        self.notify(format!("Export error: {e}"), Severity::Error);
                                         return;
                                     }
                                 };
                             match rasa_storage::export::export_buffer(&composited, &path, &settings)
                             {
                                 Ok(()) => {
-                                    self.status_message = format!("Exported: {}", path.display());
+                                    self.notify(
+                                        format!("Exported: {}", path.display()),
+                                        Severity::Info,
+                                    );
+                                    if let Some(doc) = &mut self.document {
+                                        doc.mark_clean();
+                                    }
                                 }
                                 Err(e) => {
-                                    self.status_message = format!("Export error: {e}");
+                                    self.notify(format!("Export error: {e}"), Severity::Error);
                                 }
                             }
                         }
@@ -125,6 +229,7 @@ impl RasaApp {
                 }
                 ui.separator();
                 if ui.button("Quit").clicked() {
+                    self.save_prefs();
                     std::process::exit(0);
                 }
             });
@@ -153,8 +258,23 @@ impl RasaApp {
             });
 
             ui.menu_button("View", |ui| {
-                ui.checkbox(&mut self.show_pixel_grid, "Pixel Grid");
-                ui.checkbox(&mut self.show_rulers, "Rulers");
+                ui.checkbox(&mut self.prefs.show_pixel_grid, "Pixel Grid");
+                ui.checkbox(&mut self.prefs.show_rulers, "Rulers");
+                ui.separator();
+                // Panel visibility toggles
+                for name in ["tool_palette", "layer_panel", "properties", "history"] {
+                    let visible = self.panel_states.is_visible(name);
+                    let label = match name {
+                        "tool_palette" => "Tool Palette",
+                        "layer_panel" => "Layer Panel",
+                        "properties" => "Properties",
+                        "history" => "History",
+                        _ => name,
+                    };
+                    if ui.selectable_label(visible, label).clicked() {
+                        self.panel_states.toggle(name);
+                    }
+                }
                 ui.separator();
                 if ui.button("Zoom In (+)").clicked() {
                     self.canvas.zoom *= 1.25;
@@ -274,6 +394,32 @@ impl RasaApp {
             }
         });
     }
+
+    fn show_toasts(&mut self, ctx: &egui::Context) {
+        self.toasts.gc();
+        if self.toasts.is_empty() {
+            return;
+        }
+        egui::Area::new(egui::Id::new("toasts"))
+            .anchor(egui::Align2::RIGHT_BOTTOM, egui::Vec2::new(-10.0, -10.0))
+            .show(ctx, |ui| {
+                for toast in self.toasts.active() {
+                    let color = match toast.severity {
+                        Severity::Info => egui::Color32::from_rgb(60, 140, 200),
+                        Severity::Warning => egui::Color32::from_rgb(220, 160, 40),
+                        Severity::Error => egui::Color32::from_rgb(200, 60, 60),
+                        _ => egui::Color32::GRAY,
+                    };
+                    egui::Frame::NONE
+                        .fill(color)
+                        .inner_margin(8.0)
+                        .corner_radius(4.0)
+                        .show(ui, |ui| {
+                            ui.colored_label(egui::Color32::WHITE, &toast.message);
+                        });
+                }
+            });
+    }
 }
 
 impl eframe::App for RasaApp {
@@ -285,10 +431,14 @@ impl eframe::App for RasaApp {
             self.menu_bar(ui);
         });
 
-        // Status bar
+        // Status bar — show dirty indicator and doc info
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label(&self.status_message);
+                if let Some(doc) = &self.document
+                    && doc.dirty.is_dirty()
+                {
+                    ui.label("(modified)");
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(format!("{:.0}%", self.canvas.zoom * 100.0));
                     if let Some(doc) = &self.document {
@@ -304,32 +454,40 @@ impl eframe::App for RasaApp {
         });
 
         // Tool palette (left)
-        egui::SidePanel::left("tool_palette")
-            .default_width(48.0)
-            .resizable(false)
-            .show(ctx, |ui| {
-                panels::tool_palette(ui, &mut self.active_tool);
-            });
+        if self.panel_states.is_visible("tool_palette") {
+            egui::SidePanel::left("tool_palette")
+                .default_width(48.0)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    panels::tool_palette(ui, &mut self.active_tool);
+                });
+        }
 
         // Layer panel (right)
-        egui::SidePanel::right("layer_panel")
-            .default_width(240.0)
-            .show(ctx, |ui| {
-                if let Some(doc) = &mut self.document {
-                    panels::layer_panel(ui, doc);
-                    ui.separator();
-                    panels::properties_panel(
-                        ui,
-                        &self.active_tool,
-                        &mut self.brush_size,
-                        &mut self.brush_opacity,
-                        &mut self.brush_hardness,
-                        &mut self.primary_color,
-                    );
-                    ui.separator();
-                    panels::history_panel(ui, doc);
-                }
-            });
+        if self.panel_states.is_visible("layer_panel") {
+            egui::SidePanel::right("layer_panel")
+                .default_width(240.0)
+                .show(ctx, |ui| {
+                    if let Some(doc) = &mut self.document {
+                        panels::layer_panel(ui, doc);
+                        ui.separator();
+                        if self.panel_states.is_visible("properties") {
+                            panels::properties_panel(
+                                ui,
+                                &self.active_tool,
+                                &mut self.prefs.brush_size,
+                                &mut self.prefs.brush_opacity,
+                                &mut self.prefs.brush_hardness,
+                                &mut self.prefs.primary_color,
+                            );
+                            ui.separator();
+                        }
+                        if self.panel_states.is_visible("history") {
+                            panels::history_panel(ui, doc);
+                        }
+                    }
+                });
+        }
 
         // Canvas (center)
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -338,8 +496,8 @@ impl eframe::App for RasaApp {
                     ui,
                     doc,
                     &mut self.canvas,
-                    self.show_pixel_grid,
-                    self.show_rulers,
+                    self.prefs.show_pixel_grid,
+                    self.prefs.show_rulers,
                 );
             } else {
                 ui.centered_and_justified(|ui| {
@@ -347,6 +505,14 @@ impl eframe::App for RasaApp {
                 });
             }
         });
+
+        // Toast overlay
+        self.show_toasts(ctx);
+
+        // Request repaint while toasts are active (for progress/fade animation)
+        if !self.toasts.is_empty() {
+            ctx.request_repaint();
+        }
     }
 }
 
@@ -384,7 +550,6 @@ mod tests {
 
     #[test]
     fn app_default_state() {
-        // Can't create full eframe context in tests, but verify state struct
         let mut filter_registry = FilterRegistry::new();
         rasa_engine::filter_builtins::register_builtins(&mut filter_registry);
         let mut tool_registry = ToolRegistry::new();
@@ -394,20 +559,18 @@ mod tests {
             document: Some(Document::new("Test", 100, 100)),
             canvas: CanvasState::default(),
             active_tool: ActiveTool::Brush,
-            brush_size: 10.0,
-            brush_opacity: 1.0,
-            brush_hardness: 0.8,
-            primary_color: [0.0, 0.0, 0.0],
-            show_pixel_grid: false,
-            show_rulers: true,
-            status_message: "Ready".into(),
+            prefs: AppPrefs::default(),
             filter_registry,
             tool_registry,
             plugin_manager: PluginManager::new(),
+            toasts: Toasts::new(),
+            notifications: NotificationLog::new(),
+            recent_files: RecentFiles::new(),
+            panel_states: PanelStates::new(),
         };
         assert!(app.document.is_some());
         assert_eq!(app.active_tool, ActiveTool::Brush);
-        assert_eq!(app.brush_size, 10.0);
+        assert_eq!(app.prefs.brush_size, 10.0);
         assert_eq!(app.filter_registry.len(), 4);
         assert_eq!(app.tool_registry.len(), 10);
     }
@@ -436,5 +599,41 @@ mod tests {
             let filter = reg.filter_by_name("Grayscale").unwrap();
             filter.apply(buf);
         }
+    }
+
+    #[test]
+    fn app_prefs_default() {
+        let prefs = AppPrefs::default();
+        assert!(!prefs.show_pixel_grid);
+        assert!(prefs.show_rulers);
+        assert_eq!(prefs.brush_size, 10.0);
+    }
+
+    #[test]
+    fn notifications_work() {
+        let mut toasts = Toasts::new();
+        toasts.push("test", Severity::Info);
+        assert!(!toasts.is_empty());
+        assert_eq!(toasts.len(), 1);
+    }
+
+    #[test]
+    fn recent_files_work() {
+        let mut recent = RecentFiles::new();
+        recent.add("/tmp/test.png");
+        assert_eq!(recent.len(), 1);
+        assert_eq!(
+            recent.most_recent().unwrap().to_str().unwrap(),
+            "/tmp/test.png"
+        );
+    }
+
+    #[test]
+    fn panel_states_work() {
+        let mut panels = PanelStates::new();
+        panels.register("test_panel", true);
+        assert!(panels.is_visible("test_panel"));
+        panels.toggle("test_panel");
+        assert!(!panels.is_visible("test_panel"));
     }
 }

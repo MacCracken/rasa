@@ -11,3 +11,4 @@ rasa-core = { workspace = true }
 wgpu = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+muharrir = { workspace = true, features = ["hw"] }

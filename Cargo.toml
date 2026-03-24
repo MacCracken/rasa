@@ -69,6 +69,9 @@ kurbo = "0.13"
 # Parallelism
 rayon = "1"
 
+# Editor primitives (shared with other AGNOS applications)
+muharrir = { version = "0.23.3", default-features = false }
+
 # Image processing (shared with tazama, aethersafta)
 ranga = { version = "0.20.5", default-features = false }
 

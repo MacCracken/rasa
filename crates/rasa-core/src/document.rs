@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use muharrir::dirty::DirtyState;
+
 use crate::color::{BlendMode, ColorSpace, IccProfile};
-use crate::command::{Command, History};
+use crate::command::{Command, History, apply_forward, apply_inverse};
 use crate::error::RasaError;
 use crate::geometry::Size;
 use crate::layer::{Adjustment, Layer, LayerKind};
@@ -26,6 +28,9 @@ pub struct Document {
     pub icc_profile: Option<IccProfile>,
     #[serde(skip)]
     history: Option<History>,
+    /// Tracks whether the document has unsaved modifications.
+    #[serde(skip)]
+    pub dirty: DirtyState,
 }
 
 impl Document {
@@ -52,6 +57,7 @@ impl Document {
             pixel_data,
             icc_profile: None,
             history: Some(History::new(200)),
+            dirty: DirtyState::new(),
         }
     }
 
@@ -465,6 +471,7 @@ impl Document {
 
     fn push_command(&mut self, cmd: Command) {
         self.history_mut().push(cmd);
+        self.dirty.mark_dirty();
     }
 
     pub fn can_undo(&self) -> bool {
@@ -481,7 +488,8 @@ impl Document {
             .undo()
             .ok_or(RasaError::NothingToUndo)?
             .clone();
-        self.apply_inverse(&cmd);
+        apply_inverse(&cmd, self);
+        self.dirty.mark_dirty();
         Ok(())
     }
 
@@ -491,262 +499,24 @@ impl Document {
             .redo()
             .ok_or(RasaError::NothingToRedo)?
             .clone();
-        self.apply_forward(&cmd);
+        apply_forward(&cmd, self);
+        self.dirty.mark_dirty();
         Ok(())
     }
 
-    fn apply_inverse(&mut self, cmd: &Command) {
-        match cmd {
-            Command::AddLayer { layer, index } => {
-                self.layers.remove(*index);
-                self.pixel_data.retain(|(id, _)| *id != layer.id);
-            }
-            Command::RemoveLayer { layer, index } => {
-                if let LayerKind::Raster { width, height } = layer.kind {
-                    self.pixel_data
-                        .push((layer.id, PixelBuffer::new(width, height)));
-                }
-                self.layers.insert(*index, layer.clone());
-            }
-            Command::ReorderLayer {
-                from_index,
-                to_index,
-                ..
-            } => {
-                let layer = self.layers.remove(*to_index);
-                self.layers.insert(*from_index, layer);
-            }
-            Command::RenameLayer {
-                layer_id, old_name, ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.name = old_name.clone();
-                }
-            }
-            Command::SetLayerVisibility {
-                layer_id,
-                old_visible,
-                ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.visible = *old_visible;
-                }
-            }
-            Command::SetLayerLocked {
-                layer_id,
-                old_locked,
-                ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.locked = *old_locked;
-                }
-            }
-            Command::SetLayerOpacity {
-                layer_id,
-                old_opacity,
-                ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.opacity = *old_opacity;
-                }
-            }
-            Command::SetLayerBlendMode {
-                layer_id, old_mode, ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.blend_mode = *old_mode;
-                }
-            }
-            Command::DuplicateLayer {
-                new_layer, index, ..
-            } => {
-                self.layers.remove(*index);
-                self.pixel_data.retain(|(id, _)| *id != new_layer.id);
-            }
-            Command::MergeLayers {
-                upper_layer,
-                upper_index,
-                lower_layer,
-                lower_index,
-                ..
-            } => {
-                // Undo merge: restore the original lower layer and re-insert upper
-                self.layers[*lower_index] = *lower_layer.clone();
-                // Restore lower layer's pixel data
-                if let LayerKind::Raster { width, height } = lower_layer.kind {
-                    // Replace pixel data with a fresh buffer (original pixels lost in merge)
-                    self.pixel_data.retain(|(id, _)| *id != lower_layer.id);
-                    self.pixel_data
-                        .push((lower_layer.id, PixelBuffer::new(width, height)));
-                }
-                // Re-insert upper layer
-                if let LayerKind::Raster { width, height } = upper_layer.kind {
-                    self.pixel_data
-                        .push((upper_layer.id, PixelBuffer::new(width, height)));
-                }
-                self.layers.insert(*upper_index, *upper_layer.clone());
-            }
-            Command::GroupLayers {
-                layers,
-                group_index,
-                ..
-            } => {
-                // Undo group: remove the group, re-insert original layers
-                self.layers.remove(*group_index);
-                let mut sorted = layers.clone();
-                sorted.sort_by_key(|(_, idx)| *idx);
-                for (layer, idx) in sorted {
-                    self.layers.insert(idx, layer);
-                }
-            }
-            Command::UngroupLayer {
-                group,
-                group_index,
-                children,
-                ..
-            } => {
-                // Undo ungroup: remove children, re-insert group
-                for _ in 0..children.len() {
-                    self.layers.remove(*group_index);
-                }
-                self.layers.insert(*group_index, *group.clone());
-            }
-            Command::SetAdjustment {
-                layer_id,
-                old_adjustment,
-                ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.kind = LayerKind::Adjustment(old_adjustment.clone());
-                }
-            }
-        }
+    /// Mark the document as saved (clean).
+    pub fn mark_clean(&mut self) {
+        self.dirty.mark_clean();
     }
 
-    fn apply_forward(&mut self, cmd: &Command) {
-        match cmd {
-            Command::AddLayer { layer, index } => {
-                if let LayerKind::Raster { width, height } = layer.kind {
-                    self.pixel_data
-                        .push((layer.id, PixelBuffer::new(width, height)));
-                }
-                self.layers.insert(*index, layer.clone());
-            }
-            Command::RemoveLayer { layer, index } => {
-                self.layers.remove(*index);
-                self.pixel_data.retain(|(id, _)| *id != layer.id);
-            }
-            Command::ReorderLayer {
-                from_index,
-                to_index,
-                ..
-            } => {
-                let layer = self.layers.remove(*from_index);
-                self.layers.insert(*to_index, layer);
-            }
-            Command::RenameLayer {
-                layer_id, new_name, ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.name = new_name.clone();
-                }
-            }
-            Command::SetLayerVisibility {
-                layer_id,
-                new_visible,
-                ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.visible = *new_visible;
-                }
-            }
-            Command::SetLayerLocked {
-                layer_id,
-                new_locked,
-                ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.locked = *new_locked;
-                }
-            }
-            Command::SetLayerOpacity {
-                layer_id,
-                new_opacity,
-                ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.opacity = *new_opacity;
-                }
-            }
-            Command::SetLayerBlendMode {
-                layer_id, new_mode, ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.blend_mode = *new_mode;
-                }
-            }
-            Command::DuplicateLayer {
-                original_id,
-                new_layer,
-                index,
-            } => {
-                if let Some(src_buf) = self.get_pixels(*original_id) {
-                    self.pixel_data.push((new_layer.id, src_buf.clone()));
-                }
-                self.layers.insert(*index, new_layer.clone());
-            }
-            Command::MergeLayers {
-                upper_layer,
-                upper_index: _,
-                merged,
-                lower_index,
-                ..
-            } => {
-                // Redo merge: replace lower with merged, remove upper
-                self.layers[*lower_index] = *merged.clone();
-                // Find and remove the upper layer
-                if let Some(idx) = self.layers.iter().position(|l| l.id == upper_layer.id) {
-                    self.layers.remove(idx);
-                    self.pixel_data.retain(|(id, _)| *id != upper_layer.id);
-                }
-            }
-            Command::GroupLayers {
-                group,
-                group_index,
-                layers,
-                ..
-            } => {
-                // Redo group: remove original layers (highest index first), insert group
-                let mut indices: Vec<usize> = layers.iter().map(|(_, idx)| *idx).collect();
-                indices.sort();
-                for &idx in indices.iter().rev() {
-                    self.layers.remove(idx);
-                }
-                self.layers.insert(*group_index, *group.clone());
-            }
-            Command::UngroupLayer {
-                group_index,
-                children,
-                ..
-            } => {
-                // Redo ungroup: remove group, insert children
-                self.layers.remove(*group_index);
-                let mut sorted = children.clone();
-                sorted.sort_by_key(|(_, idx)| *idx);
-                for (layer, idx) in sorted {
-                    self.layers.insert(idx, layer);
-                }
-            }
-            Command::SetAdjustment {
-                layer_id,
-                new_adjustment,
-                ..
-            } => {
-                if let Some(l) = self.find_layer_mut(*layer_id) {
-                    l.kind = LayerKind::Adjustment(new_adjustment.clone());
-                }
-            }
-        }
+    /// Returns the number of undoable commands.
+    pub fn undo_count(&self) -> usize {
+        self.history.as_ref().map_or(0, |h| h.undo_count())
+    }
+
+    /// Returns the number of redoable commands.
+    pub fn redo_count(&self) -> usize {
+        self.history.as_ref().map_or(0, |h| h.redo_count())
     }
 }
 
@@ -760,6 +530,27 @@ mod tests {
         assert_eq!(doc.layers.len(), 1);
         assert_eq!(doc.layers[0].name, "Background");
         assert!(doc.active_layer.is_some());
+    }
+
+    #[test]
+    fn new_document_starts_clean() {
+        let doc = Document::new("Test", 100, 100);
+        assert!(doc.dirty.is_clean());
+    }
+
+    #[test]
+    fn modification_marks_dirty() {
+        let mut doc = Document::new("Test", 100, 100);
+        doc.add_layer(Layer::new_raster("Layer 1", 100, 100));
+        assert!(doc.dirty.is_dirty());
+    }
+
+    #[test]
+    fn mark_clean_resets_dirty() {
+        let mut doc = Document::new("Test", 100, 100);
+        doc.add_layer(Layer::new_raster("Layer 1", 100, 100));
+        doc.mark_clean();
+        assert!(doc.dirty.is_clean());
     }
 
     #[test]
@@ -970,8 +761,6 @@ mod tests {
     #[test]
     fn nothing_to_undo_errors() {
         let mut doc = Document::new("Test", 100, 100);
-        // undo the initial add (background) — history has no entries since
-        // new() doesn't record the initial background as a command
         let result = doc.undo();
         assert!(result.is_err());
     }
@@ -984,7 +773,6 @@ mod tests {
         let l = Layer::new_raster("Top", 4, 4);
         let top_id = l.id;
         doc.add_layer(l);
-        // Fill top layer with red
         if let Some(buf) = doc.get_pixels_mut(top_id) {
             for y in 0..4 {
                 for x in 0..4 {
@@ -1008,7 +796,7 @@ mod tests {
         let bg_id = doc.layers[0].id;
         let result = doc.merge_down(bg_id);
         assert!(result.is_err());
-        let _ = doc_bg_id; // just to suppress warning
+        let _ = doc_bg_id;
     }
 
     #[test]
@@ -1046,7 +834,7 @@ mod tests {
         assert_eq!(doc.layers.len(), 3);
 
         let group_id = doc.group_layers(&[id1, id2]).unwrap();
-        assert_eq!(doc.layers.len(), 2); // Background + Group
+        assert_eq!(doc.layers.len(), 2);
         let group = doc.find_layer(group_id).unwrap();
         assert_eq!(group.name, "Group");
         if let LayerKind::Group { children } = &group.kind {
@@ -1076,7 +864,6 @@ mod tests {
         doc.add_layer(l1);
         doc.add_layer(l2);
         doc.add_layer(l3);
-        // L1 is at index 1, L3 is at index 3 — not contiguous
         let result = doc.group_layers(&[id1, id3]);
         assert!(result.is_err());
     }
@@ -1141,7 +928,6 @@ mod tests {
         assert_eq!(doc.layers.len(), 3);
         doc.undo().unwrap();
         assert_eq!(doc.layers.len(), 2);
-        // The group should be back
         if let LayerKind::Group { children } = &doc.layers[1].kind {
             assert_eq!(children.len(), 2);
         } else {
@@ -1171,7 +957,7 @@ mod tests {
         let bg_id = doc.layers[0].id;
         let result = doc.remove_layer(bg_id);
         assert!(result.is_err());
-        assert_eq!(doc.layers.len(), 1); // still there
+        assert_eq!(doc.layers.len(), 1);
     }
 
     #[test]
@@ -1192,7 +978,7 @@ mod tests {
         let mut doc = Document::new("Test", 100, 100);
         let adj_id = doc.add_adjustment_layer(
             "Brightness",
-            crate::layer::Adjustment::BrightnessContrast {
+            Adjustment::BrightnessContrast {
                 brightness: 0.2,
                 contrast: 0.0,
             },
@@ -1201,7 +987,7 @@ mod tests {
         let layer = doc.find_layer(adj_id).unwrap();
         assert_eq!(layer.name, "Brightness");
         assert!(matches!(layer.kind, LayerKind::Adjustment(_)));
-        assert!(doc.get_pixels(adj_id).is_none()); // no pixel data
+        assert!(doc.get_pixels(adj_id).is_none());
     }
 
     #[test]
@@ -1209,21 +995,21 @@ mod tests {
         let mut doc = Document::new("Test", 100, 100);
         let adj_id = doc.add_adjustment_layer(
             "BC",
-            crate::layer::Adjustment::BrightnessContrast {
+            Adjustment::BrightnessContrast {
                 brightness: 0.1,
                 contrast: 0.0,
             },
         );
         doc.set_adjustment(
             adj_id,
-            crate::layer::Adjustment::BrightnessContrast {
+            Adjustment::BrightnessContrast {
                 brightness: 0.5,
                 contrast: 0.3,
             },
         )
         .unwrap();
         let layer = doc.find_layer(adj_id).unwrap();
-        if let LayerKind::Adjustment(crate::layer::Adjustment::BrightnessContrast {
+        if let LayerKind::Adjustment(Adjustment::BrightnessContrast {
             brightness,
             contrast,
         }) = &layer.kind
@@ -1241,7 +1027,7 @@ mod tests {
         let bg_id = doc.layers[0].id;
         let result = doc.set_adjustment(
             bg_id,
-            crate::layer::Adjustment::BrightnessContrast {
+            Adjustment::BrightnessContrast {
                 brightness: 0.0,
                 contrast: 0.0,
             },
@@ -1254,7 +1040,7 @@ mod tests {
         let mut doc = Document::new("Test", 100, 100);
         let adj_id = doc.add_adjustment_layer(
             "Levels",
-            crate::layer::Adjustment::Levels {
+            Adjustment::Levels {
                 black: 0.0,
                 white: 1.0,
                 gamma: 1.0,
@@ -1262,7 +1048,7 @@ mod tests {
         );
         doc.set_adjustment(
             adj_id,
-            crate::layer::Adjustment::Levels {
+            Adjustment::Levels {
                 black: 0.1,
                 white: 0.9,
                 gamma: 2.0,
@@ -1271,7 +1057,7 @@ mod tests {
         .unwrap();
         doc.undo().unwrap();
         let layer = doc.find_layer(adj_id).unwrap();
-        if let LayerKind::Adjustment(crate::layer::Adjustment::Levels { gamma, .. }) = &layer.kind {
+        if let LayerKind::Adjustment(Adjustment::Levels { gamma, .. }) = &layer.kind {
             assert_eq!(*gamma, 1.0);
         } else {
             panic!("expected Levels after undo");
@@ -1283,7 +1069,7 @@ mod tests {
         let mut doc = Document::new("Test", 100, 100);
         let adj_id = doc.add_adjustment_layer(
             "Levels",
-            crate::layer::Adjustment::Levels {
+            Adjustment::Levels {
                 black: 0.0,
                 white: 1.0,
                 gamma: 1.0,
@@ -1291,7 +1077,7 @@ mod tests {
         );
         doc.set_adjustment(
             adj_id,
-            crate::layer::Adjustment::Levels {
+            Adjustment::Levels {
                 black: 0.1,
                 white: 0.9,
                 gamma: 2.0,
@@ -1301,7 +1087,7 @@ mod tests {
         doc.undo().unwrap();
         doc.redo().unwrap();
         let layer = doc.find_layer(adj_id).unwrap();
-        if let LayerKind::Adjustment(crate::layer::Adjustment::Levels { gamma, .. }) = &layer.kind {
+        if let LayerKind::Adjustment(Adjustment::Levels { gamma, .. }) = &layer.kind {
             assert_eq!(*gamma, 2.0);
         } else {
             panic!("expected Levels after redo");
@@ -1313,7 +1099,7 @@ mod tests {
         let mut doc = Document::new("Test", 100, 100);
         doc.add_adjustment_layer(
             "HS",
-            crate::layer::Adjustment::HueSaturation {
+            Adjustment::HueSaturation {
                 hue: 0.0,
                 saturation: 0.5,
                 lightness: 0.0,
@@ -1329,7 +1115,7 @@ mod tests {
         let mut doc = Document::new("Test", 100, 100);
         let adj_id = doc.add_adjustment_layer(
             "Curves",
-            crate::layer::Adjustment::Curves {
+            Adjustment::Curves {
                 points: vec![(0.0, 0.0), (0.5, 0.7), (1.0, 1.0)],
             },
         );
