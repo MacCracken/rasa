@@ -624,10 +624,10 @@ impl Document {
             self.layer_selection.remove(&id);
         }
         // If selection is empty but we have layers, select the last one
-        if self.layer_selection.is_empty() && !self.layers.is_empty() {
-            if let Some(last) = self.layers.last() {
-                self.layer_selection.select(last.id);
-            }
+        if self.layer_selection.is_empty()
+            && let Some(last) = self.layers.last()
+        {
+            self.layer_selection.select(last.id);
         }
         self.active_layer = self.layer_selection.primary().copied();
     }
